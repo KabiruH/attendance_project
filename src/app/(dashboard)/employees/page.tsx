@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Clock, UserCheck, UserX, AlertTriangle } from 'lucide-react';
 
+
 const Dashboard = () => {
+
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const currentTime = new Date().toLocaleTimeString();
   
@@ -49,7 +51,7 @@ const Dashboard = () => {
     <div className="p-6 space-y-6">
       {/* Welcome Section */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Welcome, Employee Name</h1>
+        <h1 className="text-2xl font-bold">Welcome, Name</h1>
         <div className="flex items-center space-x-2">
           <Clock className="w-5 h-5" />
           <span>{currentTime}</span>

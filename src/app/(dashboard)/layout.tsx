@@ -8,10 +8,10 @@ export default function DashboardLayout({
 }){
     return (
         <SidebarProvider>
-            <div className="flex-1 flex justify-center mt-5">
+            <div className="flex-1 flex max-w-full justify-center mt-7">
                 <DashboardSidebar />
-                <main className="flex-1  pt-9 pr-11 pl-11 flex justify-center"> 
-                    <div className="max-w-full">
+                <main className="flex-grow overflow-auto max-w-full"> 
+                    <div className="max-w-18 mt-7 justify-center">
                         {children}
                     </div>
                 </main>
