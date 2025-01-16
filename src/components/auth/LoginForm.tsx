@@ -2,20 +2,70 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Your login logic here
+    setLoading(true);
 
-    // After successful login (replace with your logic)
-    router.push('/attendance');
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Handle specific error from the API response
+        const errorMessage = data.error || 'Login failed';  // If the API sends a specific error
+        if (data.error === 'Invalid email or password') {
+          toast({
+            title: "Error",
+            description: "Wrong email or password",
+            variant: "destructive",  // Set the toast to "destructive" for error styling
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Show success message
+      toast({
+        title: "Success!",
+        description: "Logged in successfully",
+      });
+
+      // Redirect to dashboard
+      router.push('/employees');
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Login failed",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
 
@@ -110,6 +160,15 @@ export default function LoginForm() {
                 </button>
               </div>
               <div className="flex justify-end mt-2">
+               <span>Have an account?</span> <br/> 
+               <Link
+                  href="/signUp"
+                  className="text-sm text-green hover:text-gray-800"
+                >
+                  Sign Up Here
+                </Link>
+              </div>
+              <div className="flex justify-end mt-2">
                 <button
                   type="button"
                   className="text-sm text-gray-600 hover:text-gray-800"
@@ -122,8 +181,9 @@ export default function LoginForm() {
             <button
               type="submit"
               className="w-full bg-gray-900 text-white py-3 rounded-xl hover:bg-gray-800 transition-colors"
+              disabled={loading}
             >
-              Get Started
+              {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
         </div>
