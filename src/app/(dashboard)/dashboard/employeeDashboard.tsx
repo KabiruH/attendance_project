@@ -8,7 +8,7 @@ import { Clock, UserCheck, UserX, AlertTriangle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 interface EmployeeDashboardProps {
-  data: unknown; // Use unknown if you don't know the type yet
+  data: unknown;
 }
 
 const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
@@ -17,149 +17,147 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
   const [attendanceData, setAttendanceData] = useState([]);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [employee_id, setEmployeeId] = useState<string | null>(null);
-  const [weeklyHours, setWeeklyHours] = useState<any[]>([]); // Store weekly hours
+  const [weeklyHours, setWeeklyHours] = useState<any[]>([]);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const { toast } = useToast();
   const currentTime = new Date().toLocaleTimeString();
 
-
-  // Fetch logged-in user data
-  const fetchLoggedInUser = async () => {
+  // Fetch token and user data
+  const fetchTokenAndUser = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
+      const response = await fetch('/api/auth/check', { method: 'GET' });
 
-      const response = await fetch('/api/employees/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      if (!response.ok) throw new Error('Failed to fetch token or user data');
 
-      if (response.ok) {
-        const user = await response.json();
-        setEmployeeName(user.name);
-        setEmployeeId(user.id);
-      } else {
-        throw new Error('Failed to fetch user data');
-      }
+      const { token, user } = await response.json();
+      setAuthToken(token);
+      setEmployeeName(user.name);
+      setEmployeeId(user.id);
+
+      // Fetch attendance status immediately after getting the token
+      fetchAttendanceStatus(token, user.id);
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      console.error('Error fetching token or user:', error);
       toast({
         title: 'Error',
-        description: 'Could not fetch user data.',
+        description: 'Could not verify authentication. Please log in again.',
         variant: 'destructive',
       });
     }
   };
 
   // Fetch attendance status
-  const fetchAttendanceStatus = async () => {
+  const fetchAttendanceStatus = async (token: string, userId: string) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await fetch('/api/attendance/status', {
-        credentials: 'include',
+      const response = await fetch(`/api/attendance/status?employee_id=${userId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setIsCheckedIn(data.isCheckedIn);
-        setAttendanceData(data.attendanceData || []);
-      }
+      if (!response.ok) throw new Error('Failed to fetch attendance status');
+
+      const data = await response.json();
+      setIsCheckedIn(data.isCheckedIn || false); // Ensure a default value
+      setAttendanceData(data.attendanceData || []);
     } catch (error) {
-      console.error('Failed to fetch attendance status:', error);
+      console.error('Error fetching attendance status:', error);
+      toast({
+        title: 'Error',
+        description: 'Could not fetch attendance status.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+
+  // Handle Check-In/Check-Out
+  const handleAttendance = async (action: 'check-in' | 'check-out') => {
+    setIsLoading(true);
+    try {
+      if (!authToken || !employee_id) throw new Error('Authentication data is missing');
+
+      const response = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action, employee_id: employee_id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process attendance');
+      }
+
+      setIsCheckedIn(action === 'check-in'); // Update state based on the action
+      toast({
+        title: 'Success',
+        description: `Successfully ${action === 'check-in' ? 'checked in' : 'checked out'}`,
+      });
+
+      // Refresh attendance status
+      fetchAttendanceStatus(authToken, employee_id);
+    } catch (error) {
+      console.error('Error handling attendance:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to process attendance',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchWeeklyHours = async () => {
+    try {
+      if (!authToken || !employee_id) throw new Error('No token or employee ID available');
+
+      const response = await fetch(`/api/attendance/weekly-hours?employee_id=${employee_id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch weekly hours');
+
+      const data = await response.json();
+      setWeeklyHours(data.weeklyHours);
+    } catch (error) {
+      console.error('Failed to fetch weekly hours:', error);
+      toast({
+        title: 'Error',
+        description: 'Could not fetch weekly hours.',
+        variant: 'destructive',
+      });
     }
   };
 
   useEffect(() => {
-    fetchAttendanceStatus();
+    fetchTokenAndUser();
   }, []);
 
-  const handleAttendance = async (action: 'check-in' | 'check-out') => {
-    try {
-        const token = localStorage.getItem('token'); 
-        const response = await fetch('/api/attendance', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ action }),
-            credentials: 'include' 
-        });
-console.log(response)
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to process attendance');
-        }
-        console.log('Cookie value:', document.cookie)
-
-        const data = await response.json();
-
-        setIsCheckedIn(action === 'check-in');
-        toast({
-            title: 'Success',
-            description: `Successfully ${action === 'check-in' ? 'checked in' : 'checked out'}`,
-        });
-
-        // Refresh attendance data
-        fetchAttendanceStatus();
-    } catch (error) {
-        console.error('Attendance error:', error);
-        toast({
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'Failed to process attendance',
-            variant: 'destructive',
-        });
-    } finally {
-        setIsLoading(false);
+  useEffect(() => {
+    if (authToken && employee_id) {
+      fetchWeeklyHours();
     }
-};
+  }, [authToken, employee_id]);
 
-
-  // Calculate statistics from attendance data
+  // Calculate statistics
   const totalDays = attendanceData.length;
   const presentDays = attendanceData.reduce((acc: number, day: any) => acc + (day.present ? 1 : 0), 0);
   const lateDays = attendanceData.reduce((acc: number, day: any) => acc + (day.late ? 1 : 0), 0);
   const absentDays = attendanceData.reduce((acc: number, day: any) => acc + (day.absent ? 1 : 0), 0);
 
-  // Fetch weekly hours worked by the employee
-  const fetchWeeklyHours = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/attendance/weekly-hours?employee_id=${employee_id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setWeeklyHours(data.weeklyHours); // Assuming the response contains weekly hours data
-      }
-    } catch (error) {
-      console.error('Failed to fetch weekly hours:', error);
-    }
-  };
-
-  // Check initial status when component mounts
-  useEffect(() => {
-    fetchLoggedInUser(); // Fetch logged-in user's data
-    fetchAttendanceStatus(); // Fetch attendance data
-  }, []);
-
-  // Fetch weekly hours when the employee is fetched
-  useEffect(() => {
-    if (employee_id) {
-      fetchWeeklyHours(); // Fetch weekly hours for the logged-in employee
-    }
-  }, [employee_id]);
-
   return (
     <div className="p-6 space-y-6">
+   
       {/* Welcome Section */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Welcome, {employeeName || 'Loading...'}</h1>
