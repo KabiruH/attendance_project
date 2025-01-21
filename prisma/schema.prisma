@@ -8,21 +8,21 @@ datasource db {
 }
 
 model Attendance {
-  id             Int       @id(map: "PK__Attendan__3213E83FBD2CD3D1") @default(autoincrement())
+  id             Int       @id(map: "PK_Attendan_3213E83FBD2CD3D1") @default(autoincrement())
   employee_id    Int       // Add this line
   date           DateTime  @db.Date
   check_in_time  DateTime? @map("check_in_time")
   check_out_time DateTime? @map("check_out_time")
-  status         String   @default("Absent", map: "DF__Attendanc__statu__403A8C7D") @db.VarChar(10)
-  Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK__Attendanc__emplo__412EB0B6")
+  status         String   @default("Absent", map: "DF_Attendancstatu_403A8C7D") @db.VarChar(10)
+  Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK_Attendancemplo_412EB0B6")
 }
 
 model Employees {
-  id         Int          @id(map: "PK__Employee__3213E83FA6E3A502") @default(autoincrement())
+  id         Int          @id(map: "PK_Employee_3213E83FA6E3A502") @default(autoincrement())
   name       String?      @db.VarChar(100)
-  email      String       @unique(map: "UQ__Employee__AB6E61647DECD8E0") @db.VarChar(100)
-  role       String?      @default("Employee", map: "DF__Employees__role__398D8EEE") @db.VarChar(10)
+  email      String       @unique(map: "UQ_Employee_AB6E61647DECD8E0") @db.VarChar(100)
+  role       String?      @default("Employee", map: "DF_Employeesrole_398D8EEE") @db.VarChar(10)
   password   String       @db.VarChar(255)
-  created_at DateTime?    @default(now(), map: "DF__Employees__creat__3A81B327")
-  Attendance Attendance[]
+  created_at DateTime?    @default(now(), map: "DF_Employeescreat_3A81B327")
+  Attendance Attendance[]
 }
