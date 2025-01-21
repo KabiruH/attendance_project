@@ -1,3 +1,4 @@
+//api/status/route
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const { token, user } = await authResponse.json();
     const { id: userId, role } = user;  // Destructure user info from token
 
-    const currentDate = new Date().toISOString().split('T')[0];  // Get today's date in 'YYYY-MM-DD' format
+    const currentDate = new Date().toISOString().split('T')[0];  
 
     if (role === 'admin') {
       // Admin query - get last 7 days attendance for all employees

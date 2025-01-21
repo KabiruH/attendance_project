@@ -49,7 +49,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
   // Fetch attendance status
   const fetchAttendanceStatus = async (token: string, userId: string) => {
     try {
-      const response = await fetch(`/api/attendance/status?employee_id=${userId}`, {
+      const response = await fetch('/api/attendance/status', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -60,10 +60,20 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
       if (!response.ok) throw new Error('Failed to fetch attendance status');
 
       const data = await response.json();
-      setIsCheckedIn(data.isCheckedIn || false); // Ensure a default value
-      setAttendanceData(data.attendanceData || []);
+      if (data.role === 'admin') {
+        // Admin-specific data
+        setAttendanceData(data.attendanceData || []);
+      } else if (data.role === 'employee') {
+        // Employee-specific data
+        setIsCheckedIn(data.isCheckedIn || false);
+        setAttendanceData(data.attendanceData || []);
+      } else {
+        throw new Error('Unexpected role in response');
+      }
     } catch (error) {
       console.error('Error fetching attendance status:', error);
+  
+      // Display a toast notification for the error
       toast({
         title: 'Error',
         description: 'Could not fetch attendance status.',
@@ -117,7 +127,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
     try {
       if (!authToken || !employee_id) throw new Error('No token or employee ID available');
 
-      const response = await fetch(`/api/attendance/weekly-hours?employee_id=${employee_id}`, {
+      const response = await fetch('/api/attendance', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authToken}`,

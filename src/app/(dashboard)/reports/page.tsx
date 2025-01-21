@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { Download } from 'lucide-react';
 import Filters from '@/components/reports/Filters';
 import ReportsTable from '@/components/reports/ReportsTable';
@@ -14,43 +15,73 @@ import {
 } from '@/components/ui/pagination';
 import { cn } from '@/lib/utils';
 import type { AttendanceRecord, FilterState } from '@/components/reports/reportType';
-
-// Sample data remains the same
-const sampleData: AttendanceRecord[] = [
-  {
-    id: '1',
-    employeeId: 'EMP001',
-    employeeName: 'John Doe',
-    date: '2025-01-16',
-    timeIn: '09:00 AM',
-    timeOut: '05:00 PM',
-    status: 'present',
-  },
-  {
-    id: '2',
-    employeeId: 'EMP002',
-    employeeName: 'Jane Smith',
-    date: '2025-01-16',
-    timeIn: '09:30 AM',
-    timeOut: '05:30 PM',
-    status: 'late',
-  },
-];
+import { Toast } from '@/components/ui/toast';
 
 const ITEMS_PER_PAGE = 10;
 
 export default function ReportsPage() {
+  const [userData, setUserData] = useState<any>(null); // Store the fetched user data
   const [filters, setFilters] = useState<FilterState>({
     employeeName: '',
     status: 'all',
     startDate: '',
     endDate: '',
   });
-  
   const [currentPage, setCurrentPage] = useState(1);
+  const [userRole, setUserRole] = useState<string | null>(null); // Stores the role of the logged-in user
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+
+  // Function to fetch and authenticate the user
+  const authenticateAndFetchAttendance = async () => {
+    try {
+      const authResponse = await fetch("/api/auth/check", { method: "GET" });
+
+      if (!authResponse.ok) {
+        throw new Error("Authentication failed");
+      }
+
+      const authData = await authResponse.json();
+      const { user } = authData;
+
+      setUserRole(user.role); // Set the user role
+
+      // Fetch attendance data
+      const attendanceResponse = await fetch("/api/attendance", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authData.token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!attendanceResponse.ok) {
+        throw new Error("Failed to fetch attendance data");
+      }
+
+      const data = await attendanceResponse.json();
+console.log(data)
+      // Filter data based on user role
+      if (user.role === "admin") {
+        setAttendanceData(data.attendanceData); // Admin sees all records
+      } else {
+        const filteredData = data.attendanceData.filter((record: any) => record.employeeId === user.id);
+        setAttendanceData(filteredData); // Employee sees only their records
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      Toast({
+        title: "Error", 
+        variant: "destructive",
+      });
+    }
+  };
+
+  useEffect(() => {
+    authenticateAndFetchAttendance();
+  }, []);
 
   const filteredData = useMemo(() => {
-    return sampleData.filter((record) => {
+    return attendanceData.filter((record) => {
       const nameMatch = record.employeeName
         .toLowerCase()
         .includes(filters.employeeName.toLowerCase());
@@ -62,7 +93,7 @@ export default function ReportsPage() {
 
       return nameMatch && statusMatch && dateMatch;
     });
-  }, [filters]);
+  }, [filters, attendanceData]);
 
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
   const paginatedData = filteredData.slice(
