@@ -9,11 +9,11 @@ datasource db {
 
 model Attendance {
   id             Int       @id(map: "PK__Attendan__3213E83FBD2CD3D1") @default(autoincrement())
-  employee_id    Int
+  employee_id    Int       // Add this line
   date           DateTime  @db.Date
   check_in_time  DateTime? @map("check_in_time")
   check_out_time DateTime? @map("check_out_time")
-  status         String?   @default("Absent", map: "DF__Attendanc__statu__403A8C7D") @db.VarChar(10)
+  status         String   @default("Absent", map: "DF__Attendanc__statu__403A8C7D") @db.VarChar(10)
   Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK__Attendanc__emplo__412EB0B6")
 }
 

@@ -1,8 +1,9 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { signUp } from '@/lib/auth/auth';
 import {
   Card,
   CardContent,
@@ -29,7 +30,25 @@ const SignupForm = () => {
     email: '',
     role: '',
     password: '',
+    confirmPassword: '',
   });
+
+  // Check if passwords match and meet minimum requirements
+  const passwordsValid = useMemo(() => {
+    if (!formData.password || !formData.confirmPassword) return false;
+    if (formData.password.length < 8) return false;
+    return formData.password === formData.confirmPassword;
+  }, [formData.password, formData.confirmPassword]);
+
+  // Check if all form fields are filled
+  const isFormValid = useMemo(() => {
+    return (
+      formData.name &&
+      formData.email &&
+      formData.role &&
+      passwordsValid
+    );
+  }, [formData.name, formData.email, formData.role, passwordsValid]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -37,6 +56,7 @@ const SignupForm = () => {
       ...prev,
       [name]: value
     }));
+    setError(''); // Clear error when user makes changes
   };
 
   const handleRoleChange = (value: string) => {
@@ -44,6 +64,7 @@ const SignupForm = () => {
       ...prev,
       role: value
     }));
+    setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,9 +72,9 @@ const SignupForm = () => {
     setError('');
     setIsLoading(true);
 
-    // Basic validation
-    if (!formData.name || !formData.email || !formData.role || !formData.password) {
-      setError('All fields are required');
+    // Validation checks
+    if (!isFormValid) {
+      setError('Please fill in all fields correctly');
       setIsLoading(false);
       return;
     }
@@ -64,24 +85,21 @@ const SignupForm = () => {
       return;
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // Replace this with your actual signup API call
-      // const response = await signUp(formData);
-      console.log('Form submitted:', formData);
+      if (!isFormValid) {
+        throw new Error('Please fill in all fields correctly');
+      }
+
+      await signUp({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+      });
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Redirect to dashboard or login page
       router.push('/dashboard');
     } catch (err) {
-      setError('Failed to create account. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setIsLoading(false);
     }
@@ -137,9 +155,8 @@ const SignupForm = () => {
                 <SelectValue placeholder="Select your role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">User</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="employee">Employee</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -154,12 +171,34 @@ const SignupForm = () => {
               value={formData.password}
               onChange={handleChange}
             />
+            {formData.password && formData.password.length < 8 && (
+              <p className="text-sm text-red-500">
+                Password must be at least 8 characters long
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              placeholder="********"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+            />
+            {formData.confirmPassword && !passwordsValid && (
+              <p className="text-sm text-red-500">
+                Passwords do not match
+              </p>
+            )}
           </div>
 
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading}
+            disabled={!isFormValid || isLoading}
           >
             {isLoading ? 'Creating account...' : 'Create account'}
           </Button>

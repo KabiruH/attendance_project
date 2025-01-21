@@ -55,7 +55,7 @@ export default function LoginForm() {
       });
 
       // Redirect to dashboard
-      router.push('/employees');
+      router.push('/dashboard');
       
     } catch (error) {
       toast({

@@ -11,7 +11,7 @@ import {
       { 
         label: 'Dashboard', 
         icon: <LayoutDashboard size={20} />, 
-        href: '/employees' 
+        href: '/dashboard' 
       },
       { 
         label: 'Attendance', 

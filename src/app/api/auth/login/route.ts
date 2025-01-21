@@ -79,14 +79,6 @@ export async function POST(request: Request) {
   
       return response;
 
-    // Return user data (excluding password)
-    const { password: _, ...userWithoutPassword } = user;
-    
-    return NextResponse.json({
-      user: userWithoutPassword,
-      message: "Logged in successfully"
-    });
-
   } catch (error) {
     console.error('Login error:', error);
     
