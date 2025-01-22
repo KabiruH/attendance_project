@@ -51,7 +51,7 @@ A modern web application built with Next.js 14, TypeScript, Prisma, and SQL Serv
 
 1. Clone the repository:
 ```bash
-git clone [repository-url]
+git clone KabiruH/attendance_project
 cd employee-attendance-system
 ```
 

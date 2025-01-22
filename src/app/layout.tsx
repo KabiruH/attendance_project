@@ -31,7 +31,7 @@ export default function RootLayout({
     >
       <div className="flex min-h-screen flex-col">
         <NavbarWrapper />
-            {children}
+       {children}
             <Toaster />
       </div>
     </body>
