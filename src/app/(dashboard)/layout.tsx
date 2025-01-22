@@ -1,5 +1,6 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { DashboardSidebar }  from "@/components/ui/dashboard-sidebar"
+import LocationCheck  from "@/components/locationCheck/location";
 
 export default function DashboardLayout({
     children,
@@ -7,7 +8,8 @@ export default function DashboardLayout({
     children: React.ReactNode
 }){
     return (
-        <SidebarProvider>
+      <LocationCheck>
+         <SidebarProvider>
             <div className="flex-1 flex max-w-full justify-center mt-7">
                 <DashboardSidebar />
                 <main className="flex-grow overflow-auto max-w-full"> 
@@ -17,5 +19,6 @@ export default function DashboardLayout({
                 </main>
             </div>
         </SidebarProvider>
+        </LocationCheck> 
     )
 }

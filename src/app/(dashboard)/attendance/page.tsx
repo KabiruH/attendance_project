@@ -7,6 +7,7 @@ import { Toast } from "@/components/ui/toast"; // Assuming you have a toast comp
 interface Employee {
   id: string;
   name: string;
+  date: string;
   timeIn: string | null;
   timeOut: string | null;
   status: "present" | "late" | "absent";
@@ -52,7 +53,8 @@ function Attendance() {
         // Admin: View all employees
         const adminEmployees = attendanceData.attendanceData.map((record: any) => ({
           id: record.employee_id.toString(),
-          name: record.employee_name,
+          name: record.Employees.name,
+          date: record.date,
           timeIn: record.check_in_time,
           timeOut: record.check_out_time,
           status: record.status.toLowerCase() as 'present' | 'absent' | 'late',
@@ -63,6 +65,7 @@ function Attendance() {
         const employeeRecords = attendanceData.attendanceData.map((record: any) => ({
           id: record.employee_id.toString(),
           name: user.name,  
+          date: record.date,
           timeIn: record.check_in_time,
           timeOut: record.check_out_time,
           status: record.status.toLowerCase() as 'present' | 'absent' | 'late',

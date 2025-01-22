@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 interface Employee {
   id: string;
   name: string;
+  date: string;
   timeIn: string | null;
   timeOut: string | null;
   status: 'present' | 'absent' | 'late';
@@ -24,6 +25,10 @@ interface EmployeeTableProps {
 }
 
 const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
+  if (!employees || employees.length === 0) {
+    return <div>No records to display</div>;
+  }
+
   const getStatusColor = (status: Employee['status']) => {
     switch (status) {
       case 'present':
@@ -44,6 +49,7 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
           <TableRow>
             <TableHead className="w-[120px]">Employee ID</TableHead>
             <TableHead>Name</TableHead>
+            <TableHead className="w-[120px]">Date</TableHead>
             <TableHead className="text-center">Time In</TableHead>
             <TableHead className="text-center">Time Out</TableHead>
             <TableHead className="text-center">Status</TableHead>
@@ -51,9 +57,12 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
         </TableHeader>
         <TableBody>
           {employees.map((employee) => (
-            <TableRow key={employee.id}>
+            <TableRow key={`${employee.id}-${employee.date}`}>
               <TableCell className="font-medium">{employee.id}</TableCell>
               <TableCell>{employee.name}</TableCell>
+              <TableCell>
+  {new Date(employee.date).toLocaleDateString()}
+</TableCell>
               <TableCell className="text-center">
                 {employee.timeIn ? new Date(employee.timeIn).toLocaleTimeString([], {
                   hour: '2-digit',

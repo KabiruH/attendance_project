@@ -84,7 +84,16 @@ const EmployeeDashboard = () => {
       }
 
       const data = await response.json();
-      setIsCheckedIn(data.isCheckedIn);
+      
+       // Check if there's a record for today with check_in but no check_out
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecord = data.attendanceData.find((record: AttendanceRecord) => 
+      record.date.startsWith(today) && 
+      record.check_in_time && 
+      !record.check_out_time
+    );
+
+    setIsCheckedIn(!!todayRecord);
 
       // Process attendance data for charts
       const processedData = data.attendanceData.map((record: AttendanceRecord) => ({
@@ -128,7 +137,7 @@ const EmployeeDashboard = () => {
     setIsLoading(true);
     try {
       if (!employee_id) throw new Error('Employee ID is missing');
-
+  
       const response = await fetch('/api/attendance', {
         method: 'POST',
         credentials: 'include',
@@ -137,19 +146,20 @@ const EmployeeDashboard = () => {
         },
         body: JSON.stringify({ action, employee_id }),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to process attendance');
       }
-
-      setIsCheckedIn(action === 'check-in');
+  
+      // Wait for the status update
+      await fetchAttendanceStatus();
+  
       toast({
         title: 'Success',
         description: `Successfully ${action === 'check-in' ? 'checked in' : 'checked out'}`,
       });
-
-      await fetchAttendanceStatus();
+  
     } catch (error) {
       console.error('Error handling attendance:', error);
       toast({
@@ -163,8 +173,18 @@ const EmployeeDashboard = () => {
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchTokenAndUser();
-  }, []);
+  
+    // Set up periodic status check every minute
+    const statusInterval = setInterval(() => {
+      if (employee_id) {
+        fetchAttendanceStatus();
+      }
+    }, 60000); // Check every minute
+  
+    return () => clearInterval(statusInterval);
+  }, [employee_id]); // Re-run when employee_id changes
 
   // Calculate statistics
   const { presentDays, lateDays, absentDays } = React.useMemo(() => ({

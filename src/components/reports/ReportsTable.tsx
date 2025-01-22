@@ -16,7 +16,6 @@ interface ReportsTableProps {
 }
 
 const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
-  console.log("Table received data:", data); // Debug log
 
   if (!data || data.length === 0) {
     return <div>No records to display</div>;

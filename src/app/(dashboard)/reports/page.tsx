@@ -35,40 +35,44 @@ export default function ReportsPage() {
   // Authenticate user and fetch attendance data
   const authenticateAndFetchAttendance = async () => {
     try {
-      // Step 1: Authenticate the user
-      const authResponse = await fetch("/api/auth/check", { method: "GET" });
+      const authResponse = await fetch("/api/auth/check", { 
+        method: "GET",
+        credentials: 'include'  // Add this
+      });
+  
       if (!authResponse.ok) {
         throw new Error("Authentication failed");
       }
-
+  
       const authData = await authResponse.json();
       const { user } = authData;
       setUserRole(user.role);
-
-      // Step 2: Fetch attendance data
+  
+      // Fetch attendance data
       const attendanceResponse = await fetch("/api/attendance", {
         method: "GET",
+        credentials: 'include',  // Add this
         headers: {
-          Authorization: `Bearer ${authData.token}`,
           "Content-Type": "application/json",
         },
       });
-
+  
       if (!attendanceResponse.ok) {
         throw new Error("Failed to fetch attendance data");
       }
-
+  
       const data = await attendanceResponse.json();
+  
       if (user.role === "admin") {
         const processedData = data.attendanceData.map((record: any) => ({
           id: record.id,
           employee_id: record.employee_id,
-          date: record.date,
+          date: new Date(record.date).toISOString().split('T')[0], // Format date
           check_in_time: record.check_in_time,
           check_out_time: record.check_out_time,
-          status: record.status,
+          status: record.status.toLowerCase(),
           Employees: {
-            name: record.employee_name // Assuming this comes from your API
+            name: record.Employees?.name || record.employee_name // Handle both possible structures
           }
         }));
         setAttendanceData(processedData);
@@ -76,12 +80,12 @@ export default function ReportsPage() {
         const processedData = data.attendanceData.map((record: any) => ({
           id: record.id,
           employee_id: record.employee_id,
-          date: record.date,
+          date: new Date(record.date).toISOString().split('T')[0], // Format date
           check_in_time: record.check_in_time,
           check_out_time: record.check_out_time,
-          status: record.status,
+          status: record.status.toLowerCase(),
           Employees: {
-            name: "You" // For employee view
+            name: user.name
           }
         }));
         setAttendanceData(processedData);
@@ -92,7 +96,7 @@ export default function ReportsPage() {
       console.error("Error:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch attendance data",
+        description: error instanceof Error ? error.message : "Failed to fetch attendance data",
         variant: "destructive",
       });
       setLoading(false);
@@ -106,7 +110,6 @@ export default function ReportsPage() {
 
   // Filtered and paginated data
   const filteredData = useMemo(() => {
-    console.log("Current attendance data:", attendanceData); // Debug log
     return attendanceData.filter((record) => {
       const nameMatch = record.Employees?.name?.toLowerCase()
         .includes(filters.employeeName.toLowerCase()) ?? false;
@@ -119,7 +122,6 @@ export default function ReportsPage() {
       return nameMatch && statusMatch && dateMatch;
     });
   }, [filters, attendanceData]);
-console.log(attendanceData)
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
   const paginatedData = filteredData.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,

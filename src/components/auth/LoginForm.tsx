@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
+import { checkLocation } from '@/lib/geofence';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -19,6 +20,17 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
+      const isLocationAllowed = await checkLocation();
+      
+      if (!isLocationAllowed) {
+        toast({
+          title: "Access Denied",
+          description: "You must be within the allowed area to access this application",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
