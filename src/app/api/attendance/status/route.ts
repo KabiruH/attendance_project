@@ -1,93 +1,99 @@
-//api/status/route
+// app/api/attendance/status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import sql from 'mssql';
+import { cookies } from 'next/headers';
+import { jwtVerify } from 'jose';
+import { db } from '@/lib/db/db'; // Import your Prisma instance
 
 export async function GET(request: NextRequest) {
   try {
-    // Call the '/api/auth/check' endpoint to validate the token
-    const authResponse = await fetch('/api/auth/check', {
-      method: 'GET',
-      headers: request.headers,
-    });
+    // Get token from cookies
+    const cookieStore =await cookies();
+    const token = cookieStore.get('token');
 
-    if (!authResponse.ok) {
-      // If the token is invalid or missing, return an error response
-      const errorData = await authResponse.json();
-      return NextResponse.json({ error: errorData.error || 'Unauthorized' }, { status: 401 });
+    if (!token) {
+      return NextResponse.json(
+        { error: 'No token found' },
+        { status: 401 }
+      );
     }
 
-    const { token, user } = await authResponse.json();
-    const { id: userId, role } = user;  // Destructure user info from token
+    // Verify the token
+    const { payload } = await jwtVerify(
+      token.value,
+      new TextEncoder().encode(process.env.JWT_SECRET)
+    );
 
-    const currentDate = new Date().toISOString().split('T')[0];  
+    const userId = Number(payload.id); // Convert to number for Prisma
+    const role = payload.role as string;
+    const currentDate = new Date().toISOString().split('T')[0];
 
     if (role === 'admin') {
-      // Admin query - get last 7 days attendance for all employees
-      const result = await sql.query`
-        SELECT
-          a.employee_id,
-          e.name as employee_name,
-          a.date,
-          a.check_in_time,
-          a.check_out_time,
-          a.status
-        FROM attendance a
-        JOIN employees e ON a.employee_id = e.id
-        WHERE a.date >= DATEADD(day, -7, GETDATE())
-        ORDER BY a.date DESC, e.name ASC
-      `;
+      // Admin query using Prisma
+      const attendanceData = await db.attendance.findMany({
+        where: {
+          date: {
+            gte: new Date(new Date().setDate(new Date().getDate() - 7)) // Last 7 days
+          }
+        },
+        include: {
+          Employees: {
+            select: {
+              name: true
+            }
+          }
+        },
+        orderBy: [
+          { date: 'desc' },
+          { employee_id: 'asc' }
+        ]
+      });
 
       return NextResponse.json({
         role: 'admin',
-        attendanceData: result.recordset,
+        attendanceData: attendanceData.map(record => ({
+          ...record,
+          employee_name: record.Employees.name
+        }))
       });
     }
 
-    // Employee queries - get today's and monthly attendance
-    const [todayResult, monthlyResult] = await Promise.all([
-      sql.query`
-        SELECT * FROM attendance
-        WHERE employee_id = ${userId}
-        AND CAST(date AS DATE) = ${currentDate}
-      `,
-      sql.query`
-        SELECT
-          date,
-          status,
-          check_in_time,
-          check_out_time
-        FROM attendance
-        WHERE employee_id = ${userId}
-        AND date >= DATEADD(month, -1, GETDATE())
-        ORDER BY date DESC
-      `
+    // Employee queries using Prisma
+    const [todayAttendance, monthlyAttendance] = await Promise.all([
+      // Today's attendance
+      db.attendance.findFirst({
+        where: {
+          employee_id: userId,
+          date: {
+            equals: new Date(currentDate)
+          }
+        }
+      }),
+      // Monthly attendance
+      db.attendance.findMany({
+        where: {
+          employee_id: userId,
+          date: {
+            gte: new Date(new Date().setMonth(new Date().getMonth() - 1))
+          }
+        },
+        orderBy: {
+          date: 'desc'
+        }
+      })
     ]);
 
-    const isCheckedIn = 
-      todayResult.recordset.length > 0 && 
-      !todayResult.recordset[0].check_out_time;
+    const isCheckedIn = todayAttendance?.check_in_time && !todayAttendance?.check_out_time;
 
     return NextResponse.json({
       role: 'employee',
       isCheckedIn,
-      attendanceData: monthlyResult.recordset,
+      attendanceData: monthlyAttendance
     });
 
   } catch (error) {
     console.error('Status check error:', error);
-
-    if (error instanceof Error) {
-      // Handle specific authentication errors
-      if (['Unauthorized', 'Invalid token', 'Invalid token payload', 'jwt expired'].some(msg => error.message.includes(msg))) {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 401 }
-        );
-      }
-    }
-
     return NextResponse.json(
-      { error: 'Failed to fetch attendance status' },
+      { error: error instanceof Error ? error.message : 'Failed to fetch attendance status' },
       { status: 500 }
     );
   }

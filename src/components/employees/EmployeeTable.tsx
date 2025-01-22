@@ -54,8 +54,20 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
             <TableRow key={employee.id}>
               <TableCell className="font-medium">{employee.id}</TableCell>
               <TableCell>{employee.name}</TableCell>
-              <TableCell className="text-center">{employee.timeIn || '-'}</TableCell>
-              <TableCell className="text-center">{employee.timeOut || '-'}</TableCell>
+              <TableCell className="text-center">
+                {employee.timeIn ? new Date(employee.timeIn).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true // This will show AM/PM
+                }) : '-'}
+              </TableCell>
+              <TableCell className="text-center">
+                {employee.timeOut ? new Date(employee.timeOut).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true // This will show AM/PM
+                }) : '-'}
+              </TableCell>
               <TableCell className="text-center">
                 <Badge className={`${getStatusColor(employee.status)} px-3 py-1`}>
                   {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}

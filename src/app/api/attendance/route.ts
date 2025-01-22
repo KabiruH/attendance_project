@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
         include: {
           Employees: {
             select: {
+              id: true,
               name: true,
             },
           },

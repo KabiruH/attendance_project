@@ -15,12 +15,13 @@ import {
 } from '@/components/ui/pagination';
 import { cn } from '@/lib/utils';
 import type { AttendanceRecord, FilterState } from '@/components/reports/reportType';
-import { Toast } from '@/components/ui/toast';
+import { useToast } from "@/components/ui/use-toast";
 
 const ITEMS_PER_PAGE = 10;
 
 export default function ReportsPage() {
-  const [userData, setUserData] = useState<any>(null); // Store the fetched user data
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [filters, setFilters] = useState<FilterState>({
     employeeName: '',
     status: 'all',
@@ -28,24 +29,23 @@ export default function ReportsPage() {
     endDate: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [userRole, setUserRole] = useState<string | null>(null); // Stores the role of the logged-in user
-  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  // Function to fetch and authenticate the user
+  // Authenticate user and fetch attendance data
   const authenticateAndFetchAttendance = async () => {
     try {
+      // Step 1: Authenticate the user
       const authResponse = await fetch("/api/auth/check", { method: "GET" });
-
       if (!authResponse.ok) {
         throw new Error("Authentication failed");
       }
 
       const authData = await authResponse.json();
       const { user } = authData;
+      setUserRole(user.role);
 
-      setUserRole(user.role); // Set the user role
-
-      // Fetch attendance data
+      // Step 2: Fetch attendance data
       const attendanceResponse = await fetch("/api/attendance", {
         method: "GET",
         headers: {
@@ -59,42 +59,67 @@ export default function ReportsPage() {
       }
 
       const data = await attendanceResponse.json();
-console.log(data)
-      // Filter data based on user role
       if (user.role === "admin") {
-        setAttendanceData(data.attendanceData); // Admin sees all records
+        const processedData = data.attendanceData.map((record: any) => ({
+          id: record.id,
+          employee_id: record.employee_id,
+          date: record.date,
+          check_in_time: record.check_in_time,
+          check_out_time: record.check_out_time,
+          status: record.status,
+          Employees: {
+            name: record.employee_name // Assuming this comes from your API
+          }
+        }));
+        setAttendanceData(processedData);
       } else {
-        const filteredData = data.attendanceData.filter((record: any) => record.employeeId === user.id);
-        setAttendanceData(filteredData); // Employee sees only their records
+        const processedData = data.attendanceData.map((record: any) => ({
+          id: record.id,
+          employee_id: record.employee_id,
+          date: record.date,
+          check_in_time: record.check_in_time,
+          check_out_time: record.check_out_time,
+          status: record.status,
+          Employees: {
+            name: "You" // For employee view
+          }
+        }));
+        setAttendanceData(processedData);
       }
+  
+      setLoading(false);
     } catch (error) {
       console.error("Error:", error);
-      Toast({
-        title: "Error", 
+      toast({
+        title: "Error",
+        description: "Failed to fetch attendance data",
         variant: "destructive",
       });
+      setLoading(false);
     }
   };
 
+  // Fetch data on component mount
   useEffect(() => {
     authenticateAndFetchAttendance();
   }, []);
 
+  // Filtered and paginated data
   const filteredData = useMemo(() => {
+    console.log("Current attendance data:", attendanceData); // Debug log
     return attendanceData.filter((record) => {
-      const nameMatch = record.employeeName
-        .toLowerCase()
-        .includes(filters.employeeName.toLowerCase());
+      const nameMatch = record.Employees?.name?.toLowerCase()
+        .includes(filters.employeeName.toLowerCase()) ?? false;
       const statusMatch =
-        filters.status === 'all' || record.status === filters.status;
-      
-      const dateMatch = (!filters.startDate || record.date >= filters.startDate) &&
+        filters.status === 'all' || record.status.toLowerCase() === filters.status.toLowerCase();
+      const dateMatch =
+        (!filters.startDate || record.date >= filters.startDate) &&
         (!filters.endDate || record.date <= filters.endDate);
-
+  
       return nameMatch && statusMatch && dateMatch;
     });
   }, [filters, attendanceData]);
-
+console.log(attendanceData)
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
   const paginatedData = filteredData.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -112,7 +137,7 @@ console.log(data)
   const exportToCSV = () => {
     const headers = ['Employee ID', 'Employee Name', 'Date', 'Time In', 'Time Out', 'Status'];
     const csvData = filteredData.map(record => 
-      [record.employeeId, record.employeeName, record.date, record.timeIn, record.timeOut, record.status]
+      [record.employee_id, record.Employees?.name, record.date, record.check_in_time, record.check_out_time, record.status]
     );
     
     const csvContent = [
@@ -127,6 +152,7 @@ console.log(data)
     link.click();
   };
 
+  // Render the component
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center mb-6">
@@ -136,15 +162,19 @@ console.log(data)
           Export to CSV
         </Button>
       </div>
-      
+
       <Filters
         filters={filters}
         onFilterChange={handleFilterChange}
         resultCount={filteredData.length}
       />
-      
-      <ReportsTable data={paginatedData} />
-      
+
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <ReportsTable data={paginatedData} />
+      )}
+
       {totalPages > 1 && (
         <Pagination className="mt-4">
           <PaginationContent>
@@ -155,7 +185,7 @@ console.log(data)
                 href="#"
               />
             </PaginationItem>
-            
+
             {[...Array(totalPages)].map((_, index) => (
               <PaginationItem key={index + 1}>
                 <PaginationLink
@@ -170,7 +200,7 @@ console.log(data)
                 </PaginationLink>
               </PaginationItem>
             ))}
-            
+
             <PaginationItem>
               <PaginationNext
                 className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}

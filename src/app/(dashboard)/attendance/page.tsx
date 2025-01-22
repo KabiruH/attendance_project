@@ -51,21 +51,21 @@ function Attendance() {
       if (user.role === "admin") {
         // Admin: View all employees
         const adminEmployees = attendanceData.attendanceData.map((record: any) => ({
-          id: record.employee_id,
+          id: record.employee_id.toString(),
           name: record.employee_name,
           timeIn: record.check_in_time,
           timeOut: record.check_out_time,
-          status: record.status,
+          status: record.status.toLowerCase() as 'present' | 'absent' | 'late',
         }));
         setEmployees(adminEmployees);
       } else if (user.role === "employee") {
         // Employee: View their own attendance
         const employeeRecords = attendanceData.attendanceData.map((record: any) => ({
-          id: record.date,
-          name: "You", // You can also fetch the user's name from the JWT payload
+          id: record.employee_id.toString(),
+          name: user.name,  
           timeIn: record.check_in_time,
           timeOut: record.check_out_time,
-          status: record.status,
+          status: record.status.toLowerCase() as 'present' | 'absent' | 'late',
         }));
         setEmployees(employeeRecords);
       }

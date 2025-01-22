@@ -5,75 +5,117 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Clock, UserCheck, UserX, AlertTriangle } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 
-interface EmployeeDashboardProps {
-  data: unknown;
+interface AttendanceRecord {
+  id: number;
+  employee_id: number;
+  date: string;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  status: string;
 }
 
-const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
+interface ChartDataPoint {
+  date: string;
+  present: number;
+  late: number;
+  absent: number;
+}
+
+interface WeeklyHoursDataPoint {
+  day: string;
+  hours: number;
+}
+
+const EmployeeDashboard = () => {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [attendanceData, setAttendanceData] = useState([]);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [employee_id, setEmployeeId] = useState<string | null>(null);
-  const [weeklyHours, setWeeklyHours] = useState<any[]>([]);
-  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [attendanceData, setAttendanceData] = useState<ChartDataPoint[]>([]);
+  const [weeklyHours, setWeeklyHours] = useState<WeeklyHoursDataPoint[]>([]);
+  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
   const { toast } = useToast();
-  const currentTime = new Date().toLocaleTimeString();
 
-  // Fetch token and user data
+  // Update clock every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const fetchTokenAndUser = async () => {
     try {
-      const response = await fetch('/api/auth/check', { method: 'GET' });
+      const response = await fetch('/api/auth/check', {
+        method: 'GET',
+        credentials: 'include',
+      });
 
-      if (!response.ok) throw new Error('Failed to fetch token or user data');
+      if (!response.ok) {
+        throw new Error('Authentication failed');
+      }
 
-      const { token, user } = await response.json();
-      setAuthToken(token);
+      const { user } = await response.json();
       setEmployeeName(user.name);
       setEmployeeId(user.id);
 
-      // Fetch attendance status immediately after getting the token
-      fetchAttendanceStatus(token, user.id);
+      await fetchAttendanceStatus();
     } catch (error) {
-      console.error('Error fetching token or user:', error);
+      console.error('Error:', error);
       toast({
-        title: 'Error',
-        description: 'Could not verify authentication. Please log in again.',
+        title: 'Authentication Error',
+        description: error instanceof Error ? error.message : 'Failed to authenticate',
         variant: 'destructive',
       });
     }
   };
 
-  // Fetch attendance status
-  const fetchAttendanceStatus = async (token: string, userId: string) => {
+  const fetchAttendanceStatus = async () => {
     try {
       const response = await fetch('/api/attendance/status', {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        credentials: 'include',
       });
 
-      if (!response.ok) throw new Error('Failed to fetch attendance status');
+      if (!response.ok) {
+        throw new Error('Failed to fetch attendance status');
+      }
 
       const data = await response.json();
-      if (data.role === 'admin') {
-        // Admin-specific data
-        setAttendanceData(data.attendanceData || []);
-      } else if (data.role === 'employee') {
-        // Employee-specific data
-        setIsCheckedIn(data.isCheckedIn || false);
-        setAttendanceData(data.attendanceData || []);
-      } else {
-        throw new Error('Unexpected role in response');
-      }
+      setIsCheckedIn(data.isCheckedIn);
+
+      // Process attendance data for charts
+      const processedData = data.attendanceData.map((record: AttendanceRecord) => ({
+        date: new Date(record.date).toLocaleDateString(),
+        present: record.status.toLowerCase() === 'present' ? 1 : 0,
+        late: record.status.toLowerCase() === 'late' ? 1 : 0,
+        absent: record.status.toLowerCase() === 'absent' ? 1 : 0,
+      }));
+
+      // Process weekly hours
+      const hoursData = data.attendanceData.map((record: AttendanceRecord) => {
+        const date = new Date(record.date);
+        let hours = 0;
+
+        if (record.check_in_time && record.check_out_time) {
+          const checkIn = new Date(record.check_in_time);
+          const checkOut = new Date(record.check_out_time);
+          hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+        }
+
+        return {
+          day: date.toLocaleDateString(),
+          hours: Number(hours.toFixed(2))
+        };
+      });
+
+      setAttendanceData(processedData);
+      setWeeklyHours(hoursData);
+
     } catch (error) {
       console.error('Error fetching attendance status:', error);
-  
-      // Display a toast notification for the error
       toast({
         title: 'Error',
         description: 'Could not fetch attendance status.',
@@ -82,20 +124,18 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
     }
   };
 
-
-  // Handle Check-In/Check-Out
   const handleAttendance = async (action: 'check-in' | 'check-out') => {
     setIsLoading(true);
     try {
-      if (!authToken || !employee_id) throw new Error('Authentication data is missing');
+      if (!employee_id) throw new Error('Employee ID is missing');
 
       const response = await fetch('/api/attendance', {
         method: 'POST',
+        credentials: 'include',
         headers: {
-          Authorization: `Bearer ${authToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action, employee_id: employee_id }),
+        body: JSON.stringify({ action, employee_id }),
       });
 
       if (!response.ok) {
@@ -103,14 +143,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
         throw new Error(errorData.error || 'Failed to process attendance');
       }
 
-      setIsCheckedIn(action === 'check-in'); // Update state based on the action
+      setIsCheckedIn(action === 'check-in');
       toast({
         title: 'Success',
         description: `Successfully ${action === 'check-in' ? 'checked in' : 'checked out'}`,
       });
 
-      // Refresh attendance status
-      fetchAttendanceStatus(authToken, employee_id);
+      await fetchAttendanceStatus();
     } catch (error) {
       console.error('Error handling attendance:', error);
       toast({
@@ -123,51 +162,19 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
     }
   };
 
-  const fetchWeeklyHours = async () => {
-    try {
-      if (!authToken || !employee_id) throw new Error('No token or employee ID available');
-
-      const response = await fetch('/api/attendance', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch weekly hours');
-
-      const data = await response.json();
-      setWeeklyHours(data.weeklyHours);
-    } catch (error) {
-      console.error('Failed to fetch weekly hours:', error);
-      toast({
-        title: 'Error',
-        description: 'Could not fetch weekly hours.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   useEffect(() => {
     fetchTokenAndUser();
   }, []);
 
-  useEffect(() => {
-    if (authToken && employee_id) {
-      fetchWeeklyHours();
-    }
-  }, [authToken, employee_id]);
-
   // Calculate statistics
-  const totalDays = attendanceData.length;
-  const presentDays = attendanceData.reduce((acc: number, day: any) => acc + (day.present ? 1 : 0), 0);
-  const lateDays = attendanceData.reduce((acc: number, day: any) => acc + (day.late ? 1 : 0), 0);
-  const absentDays = attendanceData.reduce((acc: number, day: any) => acc + (day.absent ? 1 : 0), 0);
+  const { presentDays, lateDays, absentDays } = React.useMemo(() => ({
+    presentDays: attendanceData.reduce((sum, day) => sum + day.present, 0),
+    lateDays: attendanceData.reduce((sum, day) => sum + day.late, 0),
+    absentDays: attendanceData.reduce((sum, day) => sum + day.absent, 0)
+  }), [attendanceData]);
 
   return (
     <div className="p-6 space-y-6">
-   
       {/* Welcome Section */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Welcome, {employeeName || 'Loading...'}</h1>
@@ -178,7 +185,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
       </div>
 
       {/* Check In/Out Card */}
-      <Card className="bg-white">
+      <Card>
         <CardHeader>
           <CardTitle>Attendance</CardTitle>
         </CardHeader>
@@ -248,7 +255,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={attendanceData}>
-                <XAxis dataKey="date" />
+                <XAxis 
+                  dataKey="date" 
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                />
                 <YAxis />
                 <Tooltip />
                 <Legend />
@@ -267,7 +280,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={weeklyHours}>
-                <XAxis dataKey="day" />
+                <XAxis 
+                  dataKey="day"
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                />
                 <YAxis />
                 <Tooltip />
                 <Legend />

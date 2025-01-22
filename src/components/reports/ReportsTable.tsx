@@ -1,5 +1,4 @@
 'use client';
-
 import React from 'react';
 import {
   Table,
@@ -17,14 +16,22 @@ interface ReportsTableProps {
 }
 
 const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
-  const getStatusColor = (status: AttendanceRecord['status']) => {
-    switch (status) {
+  console.log("Table received data:", data); // Debug log
+
+  if (!data || data.length === 0) {
+    return <div>No records to display</div>;
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
       case 'present':
         return 'bg-green-500 hover:bg-green-600';
       case 'absent':
         return 'bg-red-500 hover:bg-red-600';
       case 'late':
         return 'bg-yellow-500 hover:bg-yellow-600';
+      default:
+        return 'bg-gray-500 hover:bg-gray-600';
     }
   };
 
@@ -44,11 +51,19 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
         <TableBody>
           {data.map((record) => (
             <TableRow key={record.id}>
-              <TableCell className="font-medium">{record.employeeId}</TableCell>
-              <TableCell>{record.employeeName}</TableCell>
-              <TableCell>{record.date}</TableCell>
-              <TableCell>{record.timeIn || '-'}</TableCell>
-              <TableCell>{record.timeOut || '-'}</TableCell>
+              <TableCell className="font-medium">{record.employee_id}</TableCell>
+              <TableCell>{record.Employees?.name || '-'}</TableCell>
+              <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
+              <TableCell>
+                {record.check_in_time 
+                  ? new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                  : '-'}
+              </TableCell>
+              <TableCell>
+                {record.check_out_time 
+                  ? new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                  : '-'}
+              </TableCell>
               <TableCell>
                 <Badge className={getStatusColor(record.status)}>
                   {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
