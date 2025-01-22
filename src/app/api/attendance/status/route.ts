@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
-
+console.error(request)
     const { payload } = await jwtVerify(
       token.value,
       new TextEncoder().encode(process.env.JWT_SECRET)

@@ -31,3 +31,5 @@ export interface FilterState {
   startDate: string;
   endDate: string;
 }
+
+export type AttendanceStatus = 'all' | 'present' | 'late' | 'absent';

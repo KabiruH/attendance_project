@@ -28,7 +28,16 @@ interface WeeklyHoursDataPoint {
   hours: number;
 }
 
-const EmployeeDashboard = () => {
+interface EmployeeDashboardProps {
+  data: {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+  }
+}
+
+const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [employeeName, setEmployeeName] = useState<string | null>(null);

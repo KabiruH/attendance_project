@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { Clock, UserCheck, UserX, AlertTriangle } from 'lucide-react';
+import { Clock, UserCheck, AlertTriangle } from 'lucide-react';
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface AttendanceRecord {

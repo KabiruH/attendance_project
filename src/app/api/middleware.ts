@@ -43,6 +43,7 @@ export async function middleware(request: NextRequest) {
     });
 
   } catch (error) {
+    console.error('Error parsing JSON:', error);
     return NextResponse.json(
       { error: 'Invalid token' },
       { status: 401 }

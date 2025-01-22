@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
     if (!employees || employees.length === 0) {
       return NextResponse.json({ error: 'No employees found' }, { status: 404 });
     }
+    console.error(req)
     return NextResponse.json(employees);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch employees' }, { status: 500 });

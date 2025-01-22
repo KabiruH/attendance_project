@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const userId = user.id;
     const role = user.role;
     const currentDate = new Date().toISOString().split('T')[0];
-
+console.error(request)
     if (role === 'admin') {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

@@ -39,7 +39,6 @@ export default function ReportsPage() {
         method: "GET",
         credentials: 'include'  // Add this
       });
-  
       if (!authResponse.ok) {
         throw new Error("Authentication failed");
       }

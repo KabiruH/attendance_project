@@ -37,6 +37,7 @@ export async function PUT(req: NextRequest) {
     try {
       updatedData = await req.json();
     } catch (error) {
+      console.error('Error parsing JSON:', error);
       return NextResponse.json({ error: 'Invalid JSON format' }, { status: 400 });
     }
   
