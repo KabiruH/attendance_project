@@ -13,8 +13,10 @@ const loginSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const validatedData = loginSchema.parse(body);
+    console.log('Login request body:', body);
 
+    const validatedData = loginSchema.parse(body);
+    
     // Find employee with user status
     const employee = await db.employees.findUnique({
       where: { email: validatedData.email },
@@ -31,6 +33,8 @@ export async function POST(request: Request) {
         }
       },
     });
+
+    console.log('Employee found:', employee ? 'Yes' : 'No');
 
     if (!employee) {
       return NextResponse.json(
@@ -53,10 +57,21 @@ export async function POST(request: Request) {
       employee.password
     );
 
+    console.log('Password match:', passwordMatch);
+
     if (!passwordMatch) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
+      );
+    }
+
+    // Ensure JWT_SECRET is defined
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET is not defined');
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
       );
     }
 
@@ -71,6 +86,8 @@ export async function POST(request: Request) {
       .setExpirationTime('24h')
       .sign(new TextEncoder().encode(process.env.JWT_SECRET));
 
+    console.log('Token generated successfully');
+
     // Set HTTP-only cookie
     const response = NextResponse.json({
       user: {
@@ -80,6 +97,8 @@ export async function POST(request: Request) {
         role: employee.role,
       },
       message: "Logged in successfully",
+    }, { 
+      status: 200 
     });
 
     response.cookies.set('token', token, {
@@ -87,12 +106,13 @@ export async function POST(request: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 60 * 60 * 24, // 24 hours
+      path: '/', // Ensure cookie is set for entire site
     });
 
     return response;
-    
+   
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Detailed login error:', error);
    
     if (error instanceof z.ZodError) {
       return NextResponse.json(
