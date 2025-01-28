@@ -159,11 +159,11 @@ model Attendance {
 
 ## License
 
-[Your License Choice]
+Optimum Limited
 
 ## Support
 
-For support, please contact [your contact information].
+For support, please contact the email in this profile.
 
 ## Acknowledgments
 
