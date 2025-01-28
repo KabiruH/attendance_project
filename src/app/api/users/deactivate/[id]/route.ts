@@ -1,11 +1,11 @@
 // app/api/users/deactivate/[id]/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/db';
 import { verifyJwtToken } from '@/lib/auth/jwt';
 
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: { id: string } }
 ) {
   try {
     // Get and verify admin token
@@ -29,7 +29,7 @@ export async function POST(
       );
     }
 
-    const userId = parseInt(params.id);
+    const userId = parseInt(context.params.id);
     if (isNaN(userId)) {
       return NextResponse.json(
         { error: "Invalid user ID" },
@@ -37,7 +37,7 @@ export async function POST(
       );
     }
 
-    // Update both Users and Employees tables
+    // Update the Users table
     const updatedUser = await db.users.update({
       where: { id: userId },
       data: { is_active: false },
@@ -47,7 +47,6 @@ export async function POST(
       message: "User deactivated successfully",
       user: updatedUser
     });
-
   } catch (error) {
     console.error('Error deactivating user:', error);
     return NextResponse.json(
