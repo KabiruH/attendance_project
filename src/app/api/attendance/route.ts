@@ -18,7 +18,6 @@ async function verifyAuth() {
     throw new Error('No token found');
   }
 
-  // Verify the token
   const { payload } = await jwtVerify(
     token.value,
     new TextEncoder().encode(process.env.JWT_SECRET)
@@ -27,13 +26,58 @@ async function verifyAuth() {
   return payload as unknown as JwtPayload;
 }
 
+// Helper function to handle auto-checkout
+async function processAutoCheckout() {
+  const currentTime = new Date();
+  const currentDate = new Date().toISOString().split('T')[0];
+  
+  // Only proceed if it's past 5 PM
+  if (currentTime.getHours() >= 17) {
+    // Find all attendance records for today without checkout
+    const pendingCheckouts = await db.attendance.findMany({
+      where: {
+        date: new Date(currentDate),
+        check_out_time: null,
+        check_in_time: {
+          not: null,
+        },
+      },
+    });
+
+    // Set checkout time to 5 PM
+    const checkoutTime = new Date(currentDate);
+    checkoutTime.setHours(17, 0, 0, 0);
+
+    // Process all pending checkouts
+    await Promise.all(
+      pendingCheckouts.map(record =>
+        db.attendance.update({
+          where: {
+            id: record.id,
+          },
+          data: {
+            check_out_time: checkoutTime,
+          },
+        })
+      )
+    );
+
+    return pendingCheckouts.length;
+  }
+  
+  return 0;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyAuth();
     const userId = user.id;
     const role = user.role;
     const currentDate = new Date().toISOString().split('T')[0];
-console.error(request)
+
+    // Process auto-checkout if needed
+    await processAutoCheckout();
+
     if (role === 'admin') {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -87,7 +131,11 @@ console.error(request)
       },
     });
 
-    const isCheckedIn = todayAttendance && !todayAttendance.check_out_time;
+    // Check if still checked in, considering auto-checkout time
+    const currentTime = new Date();
+    const isCheckedIn = todayAttendance && 
+                       !todayAttendance.check_out_time && 
+                       currentTime.getHours() < 17;
 
     return NextResponse.json({
       role: 'employee',
@@ -124,6 +172,14 @@ export async function POST(request: NextRequest) {
     const { action } = body;
     const currentTime = new Date();
     const currentDate = new Date().toISOString().split('T')[0];
+
+    // Don't allow check-in/out operations after 5 PM
+    if (currentTime.getHours() >= 17) {
+      return NextResponse.json(
+        { error: 'Operations not allowed after 5 PM' },
+        { status: 400 }
+      );
+    }
 
     const existingAttendance = await db.attendance.findFirst({
       where: {

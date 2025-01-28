@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface UserProfile {
   id: number;
@@ -29,7 +28,6 @@ interface AttendanceStats {
   lateDays: number;
   absentDays: number;
   attendanceRate: number;
-  monthlyAttendance: any[];
 }
 
 export default function ProfilePage() {
@@ -89,7 +87,6 @@ export default function ProfilePage() {
         lateDays,
         absentDays,
         attendanceRate: (presentDays / totalDays) * 100,
-        monthlyAttendance: attendanceData.attendanceData
       });
 
       setLoading(false);
@@ -197,8 +194,8 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-  {/* Password Change Form */}
-  {showPasswordForm && (
+      {/* Password Change Form */}
+      {showPasswordForm && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Change Password</CardTitle>
@@ -262,7 +259,6 @@ export default function ProfilePage() {
         </Card>
       )}
 
-
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
         <Card>
@@ -306,32 +302,6 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Attendance Chart */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Monthly Attendance Overview</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={stats?.monthlyAttendance}>
-              <XAxis 
-                dataKey="date" 
-                tick={{ fontSize: 12 }}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-              />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="present" fill="#22c55e" name="Present" />
-              <Bar dataKey="late" fill="#eab308" name="Late" />
-              <Bar dataKey="absent" fill="#ef4444" name="Absent" />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
     </div>
   );
 }
