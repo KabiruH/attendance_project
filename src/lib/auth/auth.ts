@@ -6,13 +6,17 @@ function getCookie(name: string): string | null {
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
     return null;
-  }
+}
 
 interface SignUpData {
   name: string;
   email: string;
   password: string;
   role: string;
+  id_number: string;
+  date_of_birth: string;
+  id_card_path: string;
+  passport_photo: string;
 }
 
 interface LoginData {
@@ -27,7 +31,7 @@ export interface UserPayload {
   name: string;
 }
 
-// Your existing signup function
+// Updated signup function with new fields
 export async function signUp(data: SignUpData) {
   const response = await fetch('api/auth/signup', {
     method: 'POST',
@@ -65,14 +69,14 @@ export async function login(data: LoginData) {
 
 // Get current user
 export async function getUser(): Promise<UserPayload | null> {
-    const token = getCookie('token'); // Retrieve the cookie from `document.cookie`
+    const token = getCookie('token');
   
     if (!token) return null;
   
     try {
       const { payload } = await jwtVerify(
         token,
-        new TextEncoder().encode(process.env.NEXT_PUBLIC_JWT_SECRET) // Ensure to use NEXT_PUBLIC_ for client-side access
+        new TextEncoder().encode(process.env.NEXT_PUBLIC_JWT_SECRET)
       );
   
       if (
@@ -95,8 +99,7 @@ export async function getUser(): Promise<UserPayload | null> {
       console.error('Token verification failed:', error);
       return null;
     }
-  }
-  
+}
 
 // Logout
 export async function logout() {

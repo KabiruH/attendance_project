@@ -1,25 +1,26 @@
 // middleware.ts
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
 // Arrays of public and protected paths
 const publicPaths = ['/login', '/signup', '/'];
-const protectedPaths = ['/dashboard', '/attendance', '/reports', '/profile'];
+const protectedPaths = ['/dashboard', '/attendance', '/reports', '/profile', '/users'];
+const adminOnlyPaths = ['/users'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Check if the path is protected
+  // Check path types
   const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path));
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+  const isAdminPath = adminOnlyPaths.some(path => pathname.startsWith(path));
 
   try {
     // Get token from cookies
     const token = request.cookies.get('token');
 
-    if (!token && isProtectedPath) {
+    if (!token && (isProtectedPath || isAdminPath)) {
       // Redirect to login if trying to access protected route without token
       return NextResponse.redirect(new URL('/login', request.url));
     }
@@ -29,14 +30,21 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    if (token && isProtectedPath) {
+    if (token && (isProtectedPath || isAdminPath)) {
       try {
-        // Verify the token
-        await jwtVerify(
+        // Verify the token and decode its payload
+        const { payload } = await jwtVerify(
           token.value,
           new TextEncoder().encode(process.env.JWT_SECRET)
         );
-        // Token is valid, allow access
+
+        // Check role for admin paths
+        if (isAdminPath && payload.role !== 'admin') {
+          // Redirect non-admin users to dashboard
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+
+        // Token is valid and role check passed (if required), allow access
         return NextResponse.next();
       } catch (error) {
         // Token is invalid, redirect to login
@@ -46,7 +54,6 @@ export async function middleware(request: NextRequest) {
 
     // Allow access to public routes
     return NextResponse.next();
-
   } catch (error) {
     // Handle any errors by redirecting to login
     return NextResponse.redirect(new URL('/login', request.url));

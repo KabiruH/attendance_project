@@ -7,22 +7,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Attendance {
-  id             Int       @id(map: "PK_Attendan_3213E83FBD2CD3D1") @default(autoincrement())
-  employee_id    Int       // Add this line
-  date           DateTime  @db.Date
-  check_in_time  DateTime? @map("check_in_time")
-  check_out_time DateTime? @map("check_out_time")
-  status         String   @default("Absent", map: "DF_Attendancstatu_403A8C7D") @db.VarChar(10)
-  Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK_Attendancemplo_412EB0B6")
+model Users {
+  id            Int         @id @default(autoincrement())
+  name          String      @db.VarChar(100)
+  id_number     String      @unique @db.VarChar(50)
+  role          String      @db.VarChar(20)
+  phone_number  String      @db.VarChar(20)
+  gender        String      @db.VarChar(10)
+  is_active     Boolean     @default(true)
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+  created_by    String      @db.VarChar(100)
+  Employee      Employees?  // One-to-one relation with Employees
+
+  @@map("Users")
+  @@index([id_number])
 }
 
 model Employees {
-  id         Int          @id(map: "PK_Employee_3213E83FA6E3A502") @default(autoincrement())
-  name       String?      @db.VarChar(100)
-  email      String       @unique(map: "UQ_Employee_AB6E61647DECD8E0") @db.VarChar(100)
-  role       String?      @default("Employee", map: "DF_Employeesrole_398D8EEE") @db.VarChar(10)
-  password   String       @db.VarChar(255)
-  created_at DateTime?    @default(now(), map: "DF_Employeescreat_3A81B327")
-  Attendance Attendance[]
+  id              Int          @id @default(autoincrement())
+  employee_id     Int          @unique  // This will come from Users table id
+  name            String       @db.VarChar(100)  // For verification
+  id_number       String       @db.VarChar(50)   // For verification
+  role            String       @db.VarChar(20)   // For verification
+  email           String       @unique(map: "UQ_Employee_AB6E61647DECD8E0") @db.VarChar(100)
+  password        String       @db.VarChar(255)
+  date_of_birth   DateTime     @db.Date
+  id_card_path    String       @db.VarChar(255)  // Path to stored ID card file
+  passport_photo  String       @db.VarChar(255)  // Path to stored passport photo
+  created_at      DateTime     @default(now(), map: "DF_Employeescreat_3A81B327")
+  user            Users        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  Attendance      Attendance[]
+
+  @@index([id_number, role]) // Index for faster verification lookups
+}
+
+model Attendance {
+  id             Int       @id(map: "PK_Attendan_3213E83FBD2CD3D1") @default(autoincrement())
+  employee_id    Int       
+  date           DateTime  @db.Date
+  check_in_time  DateTime? @map("check_in_time")
+  check_out_time DateTime? @map("check_out_time")
+  status         String    @default("Absent", map: "DF_Attendancstatu_403A8C7D") @db.VarChar(10)
+  Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK_Attendancemplo_412EB0B6")
 }

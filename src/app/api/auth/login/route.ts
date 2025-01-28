@@ -15,8 +15,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = loginSchema.parse(body);
 
-    // Find user
-    const user = await db.employees.findUnique({
+    // Find employee with user status
+    const employee = await db.employees.findUnique({
       where: { email: validatedData.email },
       select: {
         id: true,
@@ -24,20 +24,33 @@ export async function POST(request: Request) {
         name: true,
         password: true,
         role: true,
+        user: {
+          select: {
+            is_active: true
+          }
+        }
       },
     });
 
-    if (!user) {
+    if (!employee) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
       );
     }
 
+    // Check if user is active
+    if (!employee.user?.is_active) {
+      return NextResponse.json(
+        { error: "Your account has been deactivated. Please contact administrator." },
+        { status: 403 }
+      );
+    }
+
     // Verify password
     const passwordMatch = await bcrypt.compare(
       validatedData.password,
-      user.password
+      employee.password
     );
 
     if (!passwordMatch) {
@@ -49,10 +62,10 @@ export async function POST(request: Request) {
 
     // Create JWT token
     const token = await new SignJWT({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.name
+      id: employee.id,
+      email: employee.email,
+      role: employee.role,
+      name: employee.name
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('24h')
@@ -60,27 +73,27 @@ export async function POST(request: Request) {
 
     // Set HTTP-only cookie
     const response = NextResponse.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        },
-        message: "Logged in successfully",
-      });
-  
-      response.cookies.set('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24, // 24 hours
-      });
-  
-      return response;
+      user: {
+        id: employee.id,
+        email: employee.email,
+        name: employee.name,
+        role: employee.role,
+      },
+      message: "Logged in successfully",
+    });
 
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24, // 24 hours
+    });
+
+    return response;
+    
   } catch (error) {
     console.error('Login error:', error);
-    
+   
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0].message },

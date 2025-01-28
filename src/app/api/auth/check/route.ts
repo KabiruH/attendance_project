@@ -5,8 +5,9 @@ import { jwtVerify } from 'jose';
 
 export async function GET() {
   try {
+    // Use get with the exact cookie name
     const cookieStore = await cookies();
-    const token = cookieStore.get('token');
+    const token = cookieStore.get('token')?.value;
 
     if (!token) {
       return NextResponse.json(
@@ -17,15 +18,15 @@ export async function GET() {
 
     // Verify the token
     const { payload } = await jwtVerify(
-      token.value,
+      token,
       new TextEncoder().encode(process.env.JWT_SECRET)
     );
 
-    return NextResponse.json({ 
-      token: token.value,
-      user: payload 
+    return NextResponse.json({
+      user: payload
+    }, { 
+      status: 200 
     });
-
   } catch (error) {
     console.error('Error verifying token:', error);
     return NextResponse.json(
