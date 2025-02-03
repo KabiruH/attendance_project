@@ -1,13 +1,16 @@
 // app/api/users/deactivate/[id]/route.ts
-import { type NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/db';
 import { verifyJwtToken } from '@/lib/auth/jwt';
 
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } } // Use the correct type for context
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Get the ID from params
+    const { id } = await params;
+
     // Extract token from cookies
     const cookieHeader = request.headers.get('cookie');
     const token = cookieHeader?.split(';')
@@ -31,7 +34,7 @@ export async function POST(
     }
 
     // Validate user ID
-    const userId = parseInt(context.params.id);
+    const userId = parseInt(id);
     if (isNaN(userId)) {
       return NextResponse.json(
         { error: "Invalid user ID" },
