@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 import { signUp } from '@/lib/auth/auth';
 import {
   Card,
@@ -91,7 +92,6 @@ const SignupForm = () => {
     setIsLoading(true);
   
     try {
-      // Handle file uploads first
       const uploadFormData = new FormData();
       
       if (formData.id_card) {
@@ -112,7 +112,6 @@ const SignupForm = () => {
   
       const { id_card_path, passport_photo_path } = await uploadResponse.json();
   
-      // Then create the account with the file paths
       await signUp({
         name: formData.name,
         id_number: formData.id_number,
@@ -121,7 +120,7 @@ const SignupForm = () => {
         role: formData.role,
         date_of_birth: formData.date_of_birth,
         id_card_path,
-        passport_photo: passport_photo_path, // Note the difference in field name
+        passport_photo: passport_photo_path,
       });
       
       router.push('/dashboard');
@@ -134,7 +133,7 @@ const SignupForm = () => {
   };
   
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
         <CardTitle>Create your account</CardTitle>
         <CardDescription>
@@ -142,144 +141,163 @@ const SignupForm = () => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
           
-          <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
-            <Input
-              id="name"
-              name="name"
-              type="text"
-              placeholder="John Doe"
-              value={formData.name}
-              onChange={handleChange}
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left Column */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="John Doe"
+                  value={formData.name}
+                  onChange={handleChange}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="id_number">ID Number</Label>
-            <Input
-              id="id_number"
-              name="id_number"
-              type="text"
-              placeholder="Enter your ID number"
-              value={formData.id_number}
-              onChange={handleChange}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="john@example.com"
-              value={formData.email}
-              onChange={handleChange}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="date_of_birth">Date of Birth</Label>
+                <Input
+                  id="date_of_birth"
+                  name="date_of_birth"
+                  type="date"
+                  value={formData.date_of_birth}
+                  onChange={handleChange}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <Select
-              value={formData.role}
-              onValueChange={handleRoleChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select your role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="employee">Employee</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="id_card">ID Card (Image)</Label>
+                <Input
+                  id="id_card"
+                  name="id_card"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleChange}
+                  className="cursor-pointer"
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="date_of_birth">Date of Birth</Label>
-            <Input
-              id="date_of_birth"
-              name="date_of_birth"
-              type="date"
-              value={formData.date_of_birth}
-              onChange={handleChange}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="********"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                />
+                {formData.confirmPassword && !passwordsValid && (
+                  <p className="text-sm text-red-500">
+                    Passwords do not match
+                  </p>
+                )}
+              </div>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="id_card">ID Card (Image)</Label>
-            <Input
-              id="id_card"
-              name="id_card"
-              type="file"
-              accept="image/*"
-              onChange={handleChange}
-              className="cursor-pointer"
-            />
-          </div>
+            {/* Right Column */}
+            <div className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="id_number">ID Number</Label>
+                <Input
+                  id="id_number"
+                  name="id_number"
+                  type="text"
+                  placeholder="Enter your ID number"
+                  value={formData.id_number}
+                  onChange={handleChange}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="passport_photo">Passport Photo</Label>
-            <Input
-              id="passport_photo"
-              name="passport_photo"
-              type="file"
-              accept="image/*"
-              onChange={handleChange}
-              className="cursor-pointer"
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Role</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={handleRoleChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="employee">Employee</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="********"
-              value={formData.password}
-              onChange={handleChange}
-            />
-            {formData.password && formData.password.length < 8 && (
-              <p className="text-sm text-red-500">
-                Password must be at least 8 characters long
-              </p>
-            )}
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="passport_photo">Passport Photo</Label>
+                <Input
+                  id="passport_photo"
+                  name="passport_photo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleChange}
+                  className="cursor-pointer"
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              placeholder="********"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-            />
-            {formData.confirmPassword && !passwordsValid && (
-              <p className="text-sm text-red-500">
-                Passwords do not match
-              </p>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="********"
+                  value={formData.password}
+                  onChange={handleChange}
+                />
+                {formData.password && formData.password.length < 8 && (
+                  <p className="text-sm text-red-500">
+                    Password must be at least 8 characters long
+                  </p>
+                )}
+              </div>
+
+             
+            </div>
           </div>
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full mt-6"
             disabled={!isFormValid || isLoading}
           >
             {isLoading ? 'Creating account...' : 'Create account'}
           </Button>
         </form>
+        <div className="flex justify-end mt-2 items-center">
+  <div className="mr-2">Have an account?</div>
+  <Link
+    href="/login"
+    className="text text-blue-600 hover:text-blue-800"
+  >
+    Login
+  </Link>
+</div>
       </CardContent>
+      
     </Card>
   );
 };

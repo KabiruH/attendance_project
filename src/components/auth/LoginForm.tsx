@@ -172,10 +172,10 @@ export default function LoginForm() {
                 </button>
               </div>
               <div className="flex justify-end mt-2">
-               <span>Have an account?</span> <br/> 
+               <span className='mr-2'>Have an account?</span>  
                <Link
                   href="/signUp"
-                  className="text-sm text-green hover:text-gray-800"
+                  className="text text-green-600 hover:text-gray-800"
                 >
                   Sign Up Here
                 </Link>
@@ -183,7 +183,7 @@ export default function LoginForm() {
               <div className="flex justify-end mt-2">
                 <button
                   type="button"
-                  className="text-sm text-gray-600 hover:text-gray-800"
+                  className="text text-gray-600 hover:text-gray-800"
                 >
                   Forgot password?
                 </button>

@@ -1,14 +1,14 @@
 // app/api/users/deactivate/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/db';
 import { verifyJwtToken } from '@/lib/auth/jwt';
 
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: { id: string } } // Use the correct type for context
 ) {
   try {
-    // Get and verify admin token
+    // Extract token from cookies
     const cookieHeader = request.headers.get('cookie');
     const token = cookieHeader?.split(';')
       .find(cookie => cookie.trim().startsWith('token='))
@@ -21,6 +21,7 @@ export async function POST(
       );
     }
 
+    // Verify admin token
     const decodedToken = await verifyJwtToken(token);
     if (!decodedToken || decodedToken.role !== 'admin') {
       return NextResponse.json(
@@ -29,6 +30,7 @@ export async function POST(
       );
     }
 
+    // Validate user ID
     const userId = parseInt(context.params.id);
     if (isNaN(userId)) {
       return NextResponse.json(
@@ -37,7 +39,7 @@ export async function POST(
       );
     }
 
-    // Update the Users table
+    // Deactivate the user in the database
     const updatedUser = await db.users.update({
       where: { id: userId },
       data: { is_active: false },
