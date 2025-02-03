@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import { Toaster } from "@/components/ui/toaster"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,15 +27,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-    <body
-      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-    >
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-       {children}
-            <Toaster />
-      </div>
-    </body>
-  </html>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <div className="flex min-h-screen flex-col">
+          <Navbar />
+          {children}
+          <Toaster />
+          <SpeedInsights />
+        </div>
+      </body>
+    </html>
   );
 }
