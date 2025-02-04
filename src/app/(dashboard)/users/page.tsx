@@ -30,16 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
-interface User {
-  id: number;
-  name: string;
-  id_number: string;
-  role: string;
-  phone_number: string;
-  gender: string;
-  is_active: boolean;
-}
+import { User } from '@/lib/types/user';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -175,9 +166,13 @@ export default function UsersPage() {
     }
 };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+if (isLoading) {
+  return (
+    <div className="flex justify-center items-center min-h-screen">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+    </div>
+  );
+}
 
   return (
     <div className="container mx-auto py-10">

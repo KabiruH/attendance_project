@@ -13,7 +13,6 @@ const loginSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    console.log('Login request body:', body);
 
     const validatedData = loginSchema.parse(body);
     
@@ -34,7 +33,6 @@ export async function POST(request: Request) {
       },
     });
 
-    console.log('Employee found:', employee ? 'Yes' : 'No');
 
     if (!employee) {
       return NextResponse.json(

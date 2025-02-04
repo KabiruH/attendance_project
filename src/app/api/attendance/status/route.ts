@@ -4,7 +4,6 @@ import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { db } from '@/lib/db/db';
 
-// app/api/attendance/status/route.ts
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies();

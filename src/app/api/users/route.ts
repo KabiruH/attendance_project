@@ -25,21 +25,62 @@ const updateUserSchema = z.object({
 });
 
 // GET method to fetch all users
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Get the token from cookies
+    const cookieHeader = request.headers.get('cookie');
+    const token = cookieHeader?.split(';')
+      .find(cookie => cookie.trim().startsWith('token='))
+      ?.split('=')[1];
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized: No token provided" },
+        { status: 401 }
+      );
+    }
+
+    // Verify token and check if admin
+    const decodedToken = await verifyJwtToken(token);
+    if (!decodedToken || decodedToken.role !== 'admin') {
+      return NextResponse.json(
+        { error: "Unauthorized: Admin access required" },
+        { status: 401 }
+      );
+    }
+
     const users = await db.users.findMany({
-      select: {
-        id: true,
-        name: true,
-        id_number: true,
-        role: true,
-        phone_number: true,
-        gender: true,
-        is_active: true,
-        created_at: true
+      include: {
+        Employee: {
+          select: {
+            id_card_path: true,
+            passport_photo: true,
+            email: true,
+            date_of_birth: true
+          }
+        }
       }
     });
-    return NextResponse.json(users);
+
+    // Transform the data to a cleaner format
+    const transformedUsers = users.map(user => ({
+      id: user.id,
+      name: user.name,
+      id_number: user.id_number,
+      role: user.role,
+      phone_number: user.phone_number,
+      gender: user.gender,
+      is_active: user.is_active,
+      created_at: user.created_at,
+      // Employee data if it exists
+      email: user.Employee?.email || null,
+      date_of_birth: user.Employee?.date_of_birth ? 
+        user.Employee.date_of_birth.toISOString().split('T')[0] : null,
+      id_card_path: user.Employee?.id_card_path || null,
+      passport_photo: user.Employee?.passport_photo || null,
+    }));
+
+    return NextResponse.json(transformedUsers);
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
@@ -48,7 +89,6 @@ export async function GET() {
     );
   }
 }
-
 // POST method to create a user
 export async function POST(request: Request) {
   try {
