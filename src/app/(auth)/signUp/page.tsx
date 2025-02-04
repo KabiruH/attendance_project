@@ -11,7 +11,7 @@ export default function SignupPage() {
         {/* Content */}
         <div className="flex flex-col justify-center items-center h-full">
           <h1 className="text-4xl font-bold text-white mb-6">
-            Join Our Attendance System
+            Join Our Attendance System,
           </h1>
           <p className="text-blue-100 text-lg mb-12">
             Get started with our modern attendance tracking platform today.
