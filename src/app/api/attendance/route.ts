@@ -26,14 +26,14 @@ async function verifyAuth() {
   return payload as unknown as JwtPayload;
 }
 
-// Helper function to handle auto-checkout
-async function processAutoCheckout() {
+// Helper function to handle automatic attendance processes
+async function processAutomaticAttendance() {
   const currentTime = new Date();
   const currentDate = new Date().toISOString().split('T')[0];
   
   // Only proceed if it's past 5 PM
   if (currentTime.getHours() >= 17) {
-    // Find all attendance records for today without checkout
+    // 1. Process auto-checkouts for people who checked in but didn't check out
     const pendingCheckouts = await db.attendance.findMany({
       where: {
         date: new Date(currentDate),
@@ -62,10 +62,57 @@ async function processAutoCheckout() {
       )
     );
 
-    return pendingCheckouts.length;
+    // 2. Get all active employees
+    const activeEmployees = await db.employees.findMany({
+      where: {
+        user: {
+          is_active: true
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+    // 3. Get all attendance records for today
+    const todayAttendance = await db.attendance.findMany({
+      where: {
+        date: new Date(currentDate),
+      },
+      select: {
+        employee_id: true
+      }
+    });
+
+    // 4. Find employees without attendance records
+    const employeesWithAttendance = new Set(todayAttendance.map(record => record.employee_id));
+    const absentEmployees = activeEmployees.filter(
+      employee => !employeesWithAttendance.has(employee.id)
+    );
+
+    // 5. Create absent records for employees who didn't check in
+    if (absentEmployees.length > 0) {
+      await db.attendance.createMany({
+        data: absentEmployees.map(employee => ({
+          employee_id: employee.id,
+          date: new Date(currentDate),
+          status: 'Absent',
+          check_in_time: null,
+          check_out_time: null
+        }))
+      });
+    }
+
+    return {
+      autoCheckouts: pendingCheckouts.length,
+      absentRecords: absentEmployees.length
+    };
   }
   
-  return 0;
+  return {
+    autoCheckouts: 0,
+    absentRecords: 0
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -76,7 +123,7 @@ export async function GET(request: NextRequest) {
     const currentDate = new Date().toISOString().split('T')[0];
 
     // Process auto-checkout if needed
-    await processAutoCheckout();
+    const autoProcessResult = await processAutomaticAttendance();
 
     if (role === 'admin') {
       const sevenDaysAgo = new Date();
