@@ -203,27 +203,31 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   }), [attendanceData]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Welcome Section */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Welcome, {employeeName || 'Loading...'}</h1>
-        <div className="flex items-center space-x-2">
-          <Clock className="w-5 h-5" />
+    <div className="min-h-screen bg-slate-100 p-6 space-y-6">
+      {/* Welcome Section remains the same */}
+      <div className="flex justify-between items-center bg-white rounded-lg p-4 shadow-md">
+        <h1 className="text-3xl font-bold text-slate-900">
+          Welcome, <span className="text-blue-600">{employeeName || 'Loading...'}</span>
+        </h1>
+        <div className="flex items-center space-x-2 text-lg font-bold text-slate-900">
+          <Clock className="w-6 h-6 text-blue-600" />
           <span>{currentTime}</span>
         </div>
       </div>
 
-      {/* Check In/Out Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Attendance</CardTitle>
+      {/* Check In/Out Card remains the same */}
+      <Card className="shadow-md">
+        <CardHeader className="bg-gradient-to-r from-white via-gray-200 to-gray-300">
+          <CardTitle className="font-bold text-slate-900">Attendance</CardTitle>
         </CardHeader>
-        <CardContent className="flex justify-center space-x-4">
+        <CardContent className="flex justify-center space-x-4 p-6 bg-white">
           <Button
             size="lg"
             onClick={() => handleAttendance('check-in')}
             disabled={isCheckedIn || isLoading}
-            className={`w-32 ${isCheckedIn ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
+            className={`w-32 font-bold ${
+              isCheckedIn ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {isLoading ? 'Processing...' : 'Check In'}
           </Button>
@@ -231,57 +235,64 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
             size="lg"
             onClick={() => handleAttendance('check-out')}
             disabled={!isCheckedIn || isLoading}
-            className={`w-32 ${!isCheckedIn ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
+            className={`w-32 font-bold ${
+              !isCheckedIn ? 'bg-gray-400' : 'bg-red-600 hover:bg-slate-900'
+            }`}
           >
             {isLoading ? 'Processing...' : 'Check Out'}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+      {/* Updated Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Present Days Card - Blue theme */}
+        <Card className="shadow-md">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4 bg-blue-200 rounded-lg">
               <div>
-                <p className="text-sm font-medium text-gray-500">Present Days</p>
-                <p className="text-2xl font-bold">{presentDays}</p>
+                <p className="text-sm font-bold text-slate-900">Present Days</p>
+                <p className="text-3xl font-bold text-slate-900">{presentDays}</p>
               </div>
-              <UserCheck className="w-8 h-8 text-green-500" />
+              <UserCheck className="w-12 h-12 text-blue-700" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+
+        {/* Late Days Card - Yellow theme */}
+        <Card className="shadow-md">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4  bg-yellow-500 rounded-lg">
               <div>
-                <p className="text-sm font-medium text-gray-500">Late Days</p>
-                <p className="text-2xl font-bold">{lateDays}</p>
+                <p className="text-sm font-bold text-slate-900">Late Days</p>
+                <p className="text-3xl font-bold text-slate-900">{lateDays}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-yellow-500" />
+              <AlertTriangle className="w-12 h-12 text-yellow-600" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+
+        {/* Absent Days Card - Red theme */}
+        <Card className="shadow-md">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-4  bg-red-400 rounded-lg">
               <div>
-                <p className="text-sm font-medium text-gray-500">Absent Days</p>
-                <p className="text-2xl font-bold">{absentDays}</p>
+                <p className="text-sm font-bold text-slate-900">Absent Days</p>
+                <p className="text-3xl font-bold text-slate-900">{absentDays}</p>
               </div>
-              <UserX className="w-8 h-8 text-red-500" />
+              <UserX className="w-12 h-12 text-red-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
+      {/* Charts section remains the same */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Attendance Overview</CardTitle>
+        <Card className="shadow-md">
+          <CardHeader className="bg-gradient-to-r from-white via-gray-200 to-gray-200">
+            <CardTitle className="font-bold text-slate-900">Monthly Attendance Overview</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[300px] pt-6 bg-white">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={attendanceData}>
                 <XAxis 
@@ -292,21 +303,28 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
                   textAnchor="end"
                 />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderRadius: '8px',
+                    border: 'none',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
                 <Legend />
-                <Bar dataKey="present" fill="#22c55e" name="Present" />
+                <Bar dataKey="present" fill="#2563eb" name="Present" />
                 <Bar dataKey="late" fill="#eab308" name="Late" />
-                <Bar dataKey="absent" fill="#ef4444" name="Absent" />
+                <Bar dataKey="absent" fill="#dc2626" name="Absent" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly Hours</CardTitle>
+        <Card className="shadow-md">
+          <CardHeader className="bg-gradient-to-r from-white via-gray-200 to-gray-300">
+            <CardTitle className="font-bold text-slate-900">Weekly Hours</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[300px] pt-6 bg-white">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={weeklyHours}>
                 <XAxis 
@@ -317,7 +335,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
                   textAnchor="end"
                 />
                 <YAxis />
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderRadius: '8px',
+                    border: 'none',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
                 <Legend />
                 <Line
                   type="monotone"
@@ -325,6 +350,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
                   stroke="#2563eb"
                   name="Hours Worked"
                   strokeWidth={2}
+                  dot={{ fill: '#2563eb' }}
                 />
               </LineChart>
             </ResponsiveContainer>

@@ -137,41 +137,51 @@ const navItems = currentUser?.role === 'admin'
   }
 
   return (
-    <Sidebar className="mt-16">
+    <Sidebar className="mt-16 bg-slate-900 border-r border-slate-700">
       <SidebarContent>
         <SidebarGroup>
           <nav className="p-4">
             <ul className="space-y-2">
-            {navItems.map((item) => (
-  <li key={item.href}>
-    {item.type === 'link' ? (
-      <Link
-        href={item.href}
-        className={`flex items-center space-x-2 p-2 rounded-lg text-black-300 hover:bg-gray-800 hover:text-white
-          ${pathname === item.href ? 'bg-gray-800 text-white' : ''}`}
-      >
-        <span>{item.icon}</span>
-        <span>{item.label}</span>
-      </Link>
-    ) : (
-      <button
-        onClick={item.action}
-        className={`w-full flex items-center space-x-2 p-2 rounded-lg text-black-300 hover:bg-gray-800 hover:text-white text-left`}
-      >
-        <span>{item.icon}</span>
-        <span>{item.label}</span>
-      </button>
-    )}
-  </li>
-))}
+              {navItems.map((item) => (
+                <li key={item.href}>
+                  {item.type === 'link' ? (
+                    <Link
+                      href={item.href}
+                      className={`flex items-center space-x-3 p-3 rounded-lg
+                        transition-all duration-200
+                        ${pathname === item.href 
+                          ? 'bg-blue-600 text-white font-semibold shadow-lg' 
+                          : 'text-black hover:bg-blue-500 hover:text-white'
+                        }`}
+                    >
+                      <span className="transition-transform duration-200 hover:scale-110">
+                        {item.icon}
+                      </span>
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={item.action}
+                      className="w-full flex items-center space-x-3 p-3 rounded-lg
+                        text-black hover:bg-red-600 
+                        transition-all duration-200 text-left"
+                    >
+                      <span className="transition-transform duration-200 hover:scale-110">
+                        {item.icon}
+                      </span>
+                      <span className="font-medium">{item.label}</span>
+                    </button>
+                  )}
+                </li>
+              ))}
             </ul>
           </nav>
         </SidebarGroup>
       </SidebarContent>
       
-      <SidebarFooter>
-        <div className="p-4 space-y-2">
-          <div className="text-xs text-gray-500">
+      <SidebarFooter className="border-t border-slate-700">
+        <div className="p-4">
+          <div className="text-sm text-white/80 text-center font-medium">
             Licensed by Optimum Computer Services
           </div>
         </div>
