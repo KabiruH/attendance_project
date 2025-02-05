@@ -1,15 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Runtime configuration if needed
-  // experimental: {
-  //   runtime: 'edge',
-  // },
-  
+  output: 'standalone',
+  images: {
+    unoptimized: true
+  },
   eslint: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has ESLint errors.
     ignoreDuringBuilds: true,
   }
 };
-
 module.exports = nextConfig;
