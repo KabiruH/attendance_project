@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlserver"
-  url      = env("DATABASE_URL")
+  url      = "sqlserver://workattendanceserver.database.windows.net:1433;database=attendanceDB;user=huria@workattendanceserver;password=N3worle@ns;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;"
 }
 
 model Users {
