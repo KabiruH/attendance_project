@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Edit, Eye } from "lucide-react";
 import { User } from "@/lib/types/user";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import Link from "next/link";
 import {
   Dialog,
   DialogContent,

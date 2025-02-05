@@ -92,16 +92,31 @@ async function processAutomaticAttendance() {
 
     // 5. Create absent records for employees who didn't check in
     if (absentEmployees.length > 0) {
-      await db.attendance.createMany({
-        data: absentEmployees.map(employee => ({
-          employee_id: employee.id,
+
+      const existingAbsentRecords = await db.attendance.findMany({
+        where: {
+          employee_id: {
+            in: absentEmployees.map(e => e.id)
+          },
           date: new Date(currentDate),
-          status: 'Absent',
-          check_in_time: null,
-          check_out_time: null
-        }))
+          status: 'Absent'
+        }
       });
-    }
+      const existingAbsentIds = new Set(existingAbsentRecords.map(r => r.employee_id));
+  const newAbsentEmployees = absentEmployees.filter(e => !existingAbsentIds.has(e.id));
+
+  if (newAbsentEmployees.length > 0) {
+    await db.attendance.createMany({
+      data: newAbsentEmployees.map(employee => ({
+        employee_id: employee.id,
+        date: new Date(currentDate),
+        status: 'Absent',
+        check_in_time: null,
+        check_out_time: null
+      }))
+    });
+  }
+}
 
     return {
       autoCheckouts: pendingCheckouts.length,
@@ -152,6 +167,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         role: 'admin',
         attendanceData,
+        autoProcessed: autoProcessResult
       });
     }
 
@@ -182,7 +198,7 @@ export async function GET(request: NextRequest) {
     const currentTime = new Date();
     const isCheckedIn = todayAttendance && 
                        !todayAttendance.check_out_time && 
-                       currentTime.getHours() < 17;
+                       currentTime.getHours() < 18;
 
     return NextResponse.json({
       role: 'employee',
@@ -221,9 +237,9 @@ export async function POST(request: NextRequest) {
     const currentDate = new Date().toISOString().split('T')[0];
 
     // Don't allow check-in/out operations after 5 PM
-    if (currentTime.getHours() >= 17) {
+    if (currentTime.getHours() >= 18) {
       return NextResponse.json(
-        { error: 'Operations not allowed after 5 PM' },
+        { error: 'Operations not allowed after 6 PM' },
         { status: 400 }
       );
     }
