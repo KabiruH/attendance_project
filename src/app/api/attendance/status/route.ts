@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
-console.error(request)
+
     const { payload } = await jwtVerify(
       token.value,
       new TextEncoder().encode(process.env.JWT_SECRET)
@@ -79,7 +79,7 @@ console.error(request)
 
       const isCheckedIn = !!(todayRecord?.check_in_time && !todayRecord?.check_out_time);
 
-      // Process personal attendance data
+      // Process personal attendance data and calculate statistics
       const processedPersonalAttendance = personalAttendance.map(record => ({
         ...record,
         employee_name: record.Employees.name,
@@ -88,10 +88,24 @@ console.error(request)
         check_out_time: record.check_out_time?.toISOString() || null
       }));
 
+      // Calculate admin's personal attendance statistics
+      const totalDays = personalAttendance.length;
+      const presentDays = personalAttendance.filter(record => record.status?.toLowerCase() === 'present').length;
+      const lateDays = personalAttendance.filter(record => record.status?.toLowerCase() === 'late').length;
+      const absentDays = personalAttendance.filter(record => record.status?.toLowerCase() === 'absent').length;
+      const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
+
       return NextResponse.json({
         role: 'admin',
         isCheckedIn,
         personalAttendance: processedPersonalAttendance,
+        stats: {
+          totalDays,
+          presentDays,
+          lateDays,
+          absentDays,
+          attendanceRate
+        },
         attendanceData: allAttendance.map(record => ({
           ...record,
           employee_name: record.Employees.name,
@@ -144,6 +158,13 @@ console.error(request)
 
     const isCheckedIn = !!(todayRecord?.check_in_time && !todayRecord?.check_out_time);
 
+    // Calculate employee's attendance statistics
+    const totalDays = monthlyRecords.length;
+    const presentDays = monthlyRecords.filter(record => record.status?.toLowerCase() === 'present').length;
+    const lateDays = monthlyRecords.filter(record => record.status?.toLowerCase() === 'late').length;
+    const absentDays = monthlyRecords.filter(record => record.status?.toLowerCase() === 'absent').length;
+    const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
+
     const processedMonthlyRecords = monthlyRecords.map(record => ({
       ...record,
       employee_name: record.Employees.name,
@@ -155,6 +176,13 @@ console.error(request)
     return NextResponse.json({
       role: 'employee',
       isCheckedIn,
+      stats: {
+        totalDays,
+        presentDays,
+        lateDays,
+        absentDays,
+        attendanceRate
+      },
       todayRecord: todayRecord ? {
         ...todayRecord,
         employee_name: todayRecord.Employees.name,

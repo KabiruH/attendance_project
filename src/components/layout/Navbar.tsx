@@ -5,7 +5,7 @@ import Image from 'next/image';
 const Navbar = () => {
   return (
     <nav className="fixed w-full top-0 z-50">
-    <div className="absolute inset-0 bg-gradient-to-r from-white via-blue-900 to-slate-900 opacity-95"></div>
+    <div className="absolute inset-0 bg-gradient-to-r from-blue-300 via-white to-blue-100 opacity-95"></div>
       
       {/* Subtle accent gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent"></div>
@@ -25,12 +25,12 @@ const Navbar = () => {
                 alt="logo" 
                 width={150}  
                 height={30} 
-                className="h-10 w-90" 
+                className="h-10 w-90 rounded-lg shadow-md" 
               />
             </span>
-            <span className="text-3xl font-bold text-white relative overflow-hidden transition-transform hover:scale-105 duration-300 ease-out">
+            <span className="text-3xl font-bold text-blue-900 tracking-tight leading-tight relative overflow-hidden transition-transform hover:scale-105 duration-300 ease-out">
               Optimum Computer Systems
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out"></span>
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-red-900 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out"></span>
             </span>
           </Link>
         </div>
@@ -41,7 +41,7 @@ const Navbar = () => {
       
       {/* Optional: Animated glow effect */}
       <div className="absolute -bottom-1 left-0 right-0 h-[2px]">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 animate-pulse opacity-50"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-400 animate-pulse opacity-50"></div>
       </div>
     </nav>
   );

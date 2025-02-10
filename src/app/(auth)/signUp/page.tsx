@@ -2,6 +2,7 @@
 'use client';
 import SignupForm from '@/components/auth/SignupForm';
 import { Building2, Clock, Users } from 'lucide-react';
+import Image from 'next/image';
 
 export default function SignupPage() {
   return (
@@ -47,9 +48,19 @@ export default function SignupPage() {
         <div className="">
           <div className="">
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-                <Building2 className="w-8 h-8 text-blue-600" />
+              <div className="inline-flex items-center justify-center  rounded-full bg-blue-100 mb-4">
+                
+                 <span>
+                              <Image 
+                                src="/logo.png"  
+                                alt="logo" 
+                                width={170}  
+                                height={30} 
+                                className="h-10 w-90 rounded-lg shadow-md" 
+                              />
+                            </span>
               </div>
+
               <h1 className="text-2xl font-bold">Optimum Computer Services</h1>  
                          </div>
                        

@@ -76,25 +76,10 @@ export default function ProfilePage() {
       }
 
       const attendanceData = await attendanceResponse.json();
-
-      // Calculate attendance statistics
-      const totalDays = attendanceData.attendanceData.length;
-      const getStatusCount = (status: string) =>
-        attendanceData.attendanceData.filter(
-          (record: any) => record.status.toLowerCase() === status
-        ).length;
-
-      const presentDays = getStatusCount('present');
-      const lateDays = getStatusCount('late');
-      const absentDays = getStatusCount('absent');
-
-      setStats({
-        totalDays,
-        presentDays,
-        lateDays,
-        absentDays,
-        attendanceRate: totalDays > 0 ? (presentDays / totalDays) * 100 : 0,
-      });
+      
+      // Use the stats directly from the API response
+      setStats(attendanceData.stats);
+      
     } catch (error) {
       console.error('Error:', error);
       toast({
