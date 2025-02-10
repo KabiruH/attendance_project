@@ -38,6 +38,7 @@ model Employees {
   created_at      DateTime     @default(now(), map: "DF_Employeescreat_3A81B327")
   user            Users        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   Attendance      Attendance[]
+  PasswordReset PasswordReset[] 
 
   @@index([id_number, role]) // Index for faster verification lookups
 }
@@ -50,4 +51,17 @@ model Attendance {
   check_out_time DateTime? @map("check_out_time")
   status         String    @default("Absent", map: "DF_Attendancstatu_403A8C7D") @db.VarChar(10)
   Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK_Attendancemplo_412EB0B6")
+}
+
+model PasswordReset {
+ id        Int      @id @default(autoincrement())
+ employee_id Int
+ token     String   @unique
+ expires   DateTime
+ used      Boolean  @default(false)
+ employee  Employees @relation(fields: [employee_id], references: [id])
+ created_at DateTime @default(now())
+
+  @@map("PasswordReset") 
+  @@index([token])
 }

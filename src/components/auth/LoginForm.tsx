@@ -177,12 +177,12 @@ export default function LoginForm() {
                   Sign Up Here
                 </Link>
               </div>
-              <button
-                type="button"
+              <Link
+                href="/forgot-password"
                 className="text-gray-600 hover:text-gray-800"
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
           </div>
 
