@@ -51,6 +51,8 @@ model Attendance {
   check_out_time DateTime? @map("check_out_time")
   status         String    @default("Absent", map: "DF_Attendancstatu_403A8C7D") @db.VarChar(10)
   Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK_Attendancemplo_412EB0B6")
+
+  @@unique([employee_id, date])
 }
 
 model PasswordReset {
