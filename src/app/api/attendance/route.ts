@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { db } from '@/lib/db/db';
 import { cookies } from 'next/headers';
+import { processAutomaticAttendance } from '@/lib/utils/cronUtils';
 
 interface JwtPayload {
   id: number;
@@ -10,13 +11,21 @@ interface JwtPayload {
   name: string;
 }
 
-async function verifyAuth() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('token');
+interface AttendanceResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
 
-  if (!token) {
-    throw new Error('No token found');
-  }
+const TIME_CONSTRAINTS = {
+  CHECK_IN_START: 7,  // 7 AM
+  WORK_START: 9,      // 9 AM
+  WORK_END: 17        // 5 PM
+};
+
+async function verifyAuth(): Promise<JwtPayload> {
+  const token = (await cookies()).get('token');
+  if (!token) throw new Error('No token found');
 
   const { payload } = await jwtVerify(
     token.value,
@@ -26,181 +35,131 @@ async function verifyAuth() {
   return payload as unknown as JwtPayload;
 }
 
-// Helper function to handle automatic attendance processes
-async function processAutomaticAttendance() {
-  const currentTime = new Date();
-  const currentDate = new Date().toISOString().split('T')[0];
-  
-  // Only proceed if it's past 5 PM
-  if (currentTime.getHours() >= 17) {
-    // 1. Process auto-checkouts for people who checked in but didn't check out
-    const pendingCheckouts = await db.attendance.findMany({
-      where: {
-        date: new Date(currentDate),
-        check_out_time: null,
-        check_in_time: {
-          not: null,
+async function getAdminData(sevenDaysAgo: Date) {
+  return db.attendance.findMany({
+    where: {
+      date: { gte: sevenDaysAgo },
+    },
+    include: {
+      Employees: {
+        select: {
+          id: true,
+          name: true,
         },
       },
-    });
-
-    // Set checkout time to 5 PM
-    const checkoutTime = new Date(currentDate);
-    checkoutTime.setHours(17, 0, 0, 0);
-
-    // Process all pending checkouts
-    await Promise.all(
-      pendingCheckouts.map(record =>
-        db.attendance.update({
-          where: {
-            id: record.id,
-          },
-          data: {
-            check_out_time: checkoutTime,
-          },
-        })
-      )
-    );
-
-    // 2. Get all active employees
-    const activeEmployees = await db.employees.findMany({
-      where: {
-        user: {
-          is_active: true
-        }
-      },
-      select: {
-        id: true
-      }
-    });
-
-    // 3. Get all attendance records for today
-    const todayAttendance = await db.attendance.findMany({
-      where: {
-        date: new Date(currentDate),
-      },
-      select: {
-        employee_id: true
-      }
-    });
-
-    // 4. Find employees without attendance records
-    const employeesWithAttendance = new Set(todayAttendance.map(record => record.employee_id));
-    const absentEmployees = activeEmployees.filter(
-      employee => !employeesWithAttendance.has(employee.id)
-    );
-
-    // 5. Create absent records for employees who didn't check in
-    if (absentEmployees.length > 0) {
-
-      const existingAbsentRecords = await db.attendance.findMany({
-        where: {
-          employee_id: {
-            in: absentEmployees.map(e => e.id)
-          },
-          date: new Date(currentDate),
-          status: 'Absent'
-        }
-      });
-      const existingAbsentIds = new Set(existingAbsentRecords.map(r => r.employee_id));
-  const newAbsentEmployees = absentEmployees.filter(e => !existingAbsentIds.has(e.id));
-
-  if (newAbsentEmployees.length > 0) {
-    await db.attendance.createMany({
-      data: newAbsentEmployees.map(employee => ({
-        employee_id: employee.id,
-        date: new Date(currentDate),
-        status: 'Absent',
-        check_in_time: null,
-        check_out_time: null
-      }))
-    });
-  }
+    },
+    orderBy: [
+      { date: 'desc' },
+      { Employees: { name: 'asc' } },
+    ],
+  });
 }
 
-    return {
-      autoCheckouts: pendingCheckouts.length,
-      absentRecords: absentEmployees.length
+async function getEmployeeData(userId: number, thirtyDaysAgo: Date) {
+  return db.attendance.findMany({
+    where: {
+      employee_id: userId,
+      date: { gte: thirtyDaysAgo },
+    },
+    orderBy: { date: 'desc' },
+  });
+}
+
+async function handleCheckIn(employee_id: number, currentTime: Date, currentDate: string): Promise<AttendanceResponse> {
+  if (currentTime.getHours() < TIME_CONSTRAINTS.CHECK_IN_START) {
+    return { success: false, error: 'Check-in not allowed before 7 AM' };
+  }
+
+  if (currentTime.getHours() >= TIME_CONSTRAINTS.WORK_END) {
+    return { success: false, error: 'Check-in not allowed after 5 PM' };
+  }
+
+  const existingAttendance = await db.attendance.findFirst({
+    where: { employee_id, date: new Date(currentDate) },
+  });
+
+  if (existingAttendance) {
+    return { success: false, error: 'Already checked in today' };
+  }
+
+  const startTime = new Date(currentTime);
+  startTime.setHours(TIME_CONSTRAINTS.WORK_START, 0, 0, 0);
+  const status = currentTime > startTime ? 'Late' : 'Present';
+
+  const attendance = await db.attendance.create({
+    data: {
+      employee_id,
+      date: new Date(currentDate),
+      check_in_time: currentTime,
+      status,
+    },
+  });
+
+  return { success: true, data: attendance };
+}
+
+async function handleCheckOut(employee_id: number, currentTime: Date, currentDate: string): Promise<AttendanceResponse> {
+  if (currentTime.getHours() >= TIME_CONSTRAINTS.WORK_END) {
+    return { 
+      success: false, 
+      error: 'Manual check-out not allowed after 5 PM. System will automatically check you out.' 
     };
   }
-  
-  return {
-    autoCheckouts: 0,
-    absentRecords: 0
-  };
+
+  const existingAttendance = await db.attendance.findFirst({
+    where: { employee_id, date: new Date(currentDate) },
+  });
+
+  if (!existingAttendance) {
+    return { success: false, error: 'No check-in record found for today' };
+  }
+
+  if (existingAttendance.check_out_time) {
+    return { success: false, error: 'Already checked out today' };
+  }
+
+  const attendance = await db.attendance.update({
+    where: { id: existingAttendance.id },
+    data: { check_out_time: currentTime },
+  });
+
+  return { success: true, data: attendance };
 }
 
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyAuth();
-    const userId = user.id;
-    const role = user.role;
     const currentDate = new Date().toISOString().split('T')[0];
-
-    // Process auto-checkout if needed
     const autoProcessResult = await processAutomaticAttendance();
 
-    if (role === 'admin') {
+    if (user.role === 'admin') {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const attendanceData = await db.attendance.findMany({
-        where: {
-          date: {
-            gte: sevenDaysAgo,
-          },
-        },
-        include: {
-          Employees: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: [
-          { date: 'desc' },
-          { Employees: { name: 'asc' } },
-        ],
-      });
+      const attendanceData = await getAdminData(sevenDaysAgo);
 
       return NextResponse.json({
+        success: true,
         role: 'admin',
         attendanceData,
         autoProcessed: autoProcessResult
       });
     }
 
-    // For employees - get today's attendance
-    const todayAttendance = await db.attendance.findFirst({
-      where: {
-        employee_id: userId,
-        date: new Date(currentDate),
-      },
-    });
-
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const monthlyData = await getEmployeeData(user.id, thirtyDaysAgo);
 
-    const monthlyData = await db.attendance.findMany({
-      where: {
-        employee_id: userId,
-        date: {
-          gte: thirtyDaysAgo,
-        },
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    });
+    const todayAttendance = monthlyData.find(
+      record => record.date.toISOString().split('T')[0] === currentDate
+    );
 
-    // Check if still checked in, considering auto-checkout time
     const currentTime = new Date();
     const isCheckedIn = todayAttendance && 
                        !todayAttendance.check_out_time && 
-                       currentTime.getHours() < 18;
+                       currentTime.getHours() < TIME_CONSTRAINTS.WORK_END;
 
     return NextResponse.json({
+      success: true,
       role: 'employee',
       isCheckedIn,
       attendanceData: monthlyData,
@@ -208,7 +167,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Status check error:', error);
     return NextResponse.json(
-      { error: 'Authentication failed' },
+      { success: false, error: 'Authentication failed' },
       { status: 401 }
     );
   }
@@ -217,105 +176,42 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyAuth();
-    const employee_id = user.id;
-
-    // Verify employee exists
     const employee = await db.employees.findUnique({
-      where: { id: employee_id },
+      where: { id: user.id },
     });
 
     if (!employee) {
       return NextResponse.json(
-        { error: 'Employee not found' },
+        { success: false, error: 'Employee not found' },
         { status: 404 }
       );
     }
 
-    const body = await request.json();
-    const { action } = body;
+    const { action } = await request.json();
     const currentTime = new Date();
-    const currentDate = new Date().toISOString().split('T')[0];
+    const currentDate = currentTime.toISOString().split('T')[0];
 
-    // Don't allow check-in/out operations after 5 PM
-    if (currentTime.getHours() >= 18) {
+    const handler = action === 'check-in' ? handleCheckIn : 
+                   action === 'check-out' ? handleCheckOut : 
+                   null;
+
+    if (!handler) {
       return NextResponse.json(
-        { error: 'Operations not allowed after 6 PM' },
+        { success: false, error: 'Invalid action' },
         { status: 400 }
       );
     }
 
-    const existingAttendance = await db.attendance.findFirst({
-      where: {
-        employee_id,
-        date: new Date(currentDate),
-      },
-    });
-
-    if (action === 'check-in') {
-      if (existingAttendance) {
-        return NextResponse.json(
-          { error: 'Already checked in today' },
-          { status: 400 }
-        );
-      }
-
-      const startTime = new Date();
-      startTime.setHours(9, 0, 0, 0);
-      const status = currentTime > startTime ? 'Late' : 'Present';
-
-      const attendance = await db.attendance.create({
-        data: {
-          employee_id,
-          date: new Date(currentDate),
-          check_in_time: currentTime,
-          status,
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: attendance,
-      });
-    }
-
-    if (action === 'check-out') {
-      if (!existingAttendance) {
-        return NextResponse.json(
-          { error: 'No check-in record found for today' },
-          { status: 400 }
-        );
-      }
-
-      if (existingAttendance.check_out_time) {
-        return NextResponse.json(
-          { error: 'Already checked out today' },
-          { status: 400 }
-        );
-      }
-
-      const attendance = await db.attendance.update({
-        where: {
-          id: existingAttendance.id,
-        },
-        data: {
-          check_out_time: currentTime,
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: attendance,
-      });
-    }
-
+    const result = await handler(user.id, currentTime, currentDate);
     return NextResponse.json(
-      { error: 'Invalid action' },
-      { status: 400 }
+      result,
+      { status: result.success ? 200 : 400 }
     );
+
   } catch (error) {
     console.error('Attendance error:', error);
     return NextResponse.json(
-      { error: 'Authentication failed' },
+      { success: false, error: 'Authentication failed' },
       { status: 401 }
     );
   }

@@ -1,5 +1,4 @@
 'use client';
-
 import React from 'react';
 import {
   Table,
@@ -42,6 +41,27 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatTime = (timeStr: string | null) => {
+    if (!timeStr) return '-';
+    try {
+      return new Date(timeStr).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return timeStr || '-';
+    }
+  };
+
   return (
     <div className="overflow-auto rounded-md border">
       <Table className="min-w-[600px] md:w-full">
@@ -60,23 +80,9 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
             <TableRow key={`${employee.id}-${employee.date}`}>
               <TableCell className="font-medium">{employee.id}</TableCell>
               <TableCell>{employee.name}</TableCell>
-              <TableCell>
-  {new Date(employee.date).toLocaleDateString()}
-</TableCell>
-              <TableCell className="text-center">
-                {employee.timeIn ? new Date(employee.timeIn).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true // This will show AM/PM
-                }) : '-'}
-              </TableCell>
-              <TableCell className="text-center">
-                {employee.timeOut ? new Date(employee.timeOut).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true // This will show AM/PM
-                }) : '-'}
-              </TableCell>
+              <TableCell>{formatDate(employee.date)}</TableCell>
+              <TableCell className="text-center">{formatTime(employee.timeIn)}</TableCell>
+              <TableCell className="text-center">{formatTime(employee.timeOut)}</TableCell>
               <TableCell className="text-center">
                 <Badge className={`${getStatusColor(employee.status)} px-3 py-1`}>
                   {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
