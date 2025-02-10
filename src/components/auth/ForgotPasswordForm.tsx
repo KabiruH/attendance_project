@@ -54,7 +54,7 @@ export default function ForgotPasswordForm() {
         {/* Content */}
         <div className="flex flex-col justify-center items-center h-full">
           <h1 className="text-4xl font-bold text-white mb-6">
-            Reset Your<br />Password
+            Reset Your Password
           </h1>
           <p className="text-blue-100 text-lg mb-12">
             Securely recover access to your account.

@@ -11,7 +11,7 @@ export default function LoginPage() {
         {/* Content */}
         <div className="flex flex-col justify-center items-center h-full">
           <h1 className="text-4xl font-bold text-white mb-6">
-            Welcome to Your<br />Attendance System
+            Welcome to our Attendance System
           </h1>
           <p className="text-blue-100 text-lg mb-12">
             Streamline your attendance tracking with our modern, user-friendly platform.

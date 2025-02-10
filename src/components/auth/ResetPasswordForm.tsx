@@ -89,7 +89,7 @@ export default function ResetPasswordForm() {
         {/* Content */}
         <div className="flex flex-col justify-center items-center h-full">
           <h1 className="text-4xl font-bold text-white mb-6">
-            Create New<br />Password
+            Create New Password
           </h1>
           <p className="text-blue-100 text-lg mb-12">
             Secure your account with a strong password.
