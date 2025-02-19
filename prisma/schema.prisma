@@ -67,3 +67,14 @@ model PasswordReset {
   @@map("PasswordReset") 
   @@index([token])
 }
+
+model AttendanceProcessingLog {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  records_processed Int
+  status    String   // 'completed' | 'failed'
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([date])
+}

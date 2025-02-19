@@ -8,8 +8,8 @@ interface AttendanceStatsProps {
 
 export function AttendanceStats({ stats }: AttendanceStatsProps) {
   const statItems = [
-    { label: 'Attendance Rate', value: `${stats.attendanceRate.toFixed(1)}%` },
-    { label: 'Present Days', value: stats.presentDays, color: 'text-green-600' },
+    { label: 'On time ratio', value: `${stats.attendanceRate.toFixed(1)}%` },
+    { label: 'On time Days', value: stats.presentDays, color: 'text-green-600' },
     { label: 'Late Days', value: stats.lateDays, color: 'text-yellow-600' },
     { label: 'Absent Days', value: stats.absentDays, color: 'text-red-600' },
   ];
