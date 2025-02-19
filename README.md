@@ -32,7 +32,7 @@ A modern web application built with Next.js 14, TypeScript, Prisma, and SQL Serv
 
 ## Technology Stack
 
-- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
+- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
 - **UI Components**: shadcn/ui
 - **Backend**: Next.js API Routes
 - **Database**: SQL Server
