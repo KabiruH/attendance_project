@@ -3,9 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { db } from '@/lib/db/db';
+import { ensureCheckouts } from '@/lib/utils/cronUtils';
 
 export async function GET(request: NextRequest) {
   try {
+ // First ensure all checkouts are processed
+    await ensureCheckouts();
+   
     const cookieStore = await cookies();
     const token = cookieStore.get('token');
    

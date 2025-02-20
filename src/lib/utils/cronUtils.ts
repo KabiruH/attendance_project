@@ -184,3 +184,74 @@ export async function processAutomaticAttendance() {
       };
   }
 }
+
+export async function ensureCheckouts() {
+  try {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const currentHour = new Date().getHours();
+
+    // Find all records from today that haven't been checked out
+    // and where it's past 5 PM
+    if (currentHour >= 17) {
+      const pendingCheckouts = await db.attendance.findMany({
+        where: {
+          date: new Date(currentDate),
+          check_out_time: null,
+          check_in_time: {
+            not: null,
+          },
+        },
+      });
+
+      if (pendingCheckouts.length > 0) {
+        const checkoutTime = new Date(currentDate + 'T17:00:00');
+        
+        await db.attendance.updateMany({
+          where: {
+            id: {
+              in: pendingCheckouts.map(record => record.id)
+            }
+          },
+          data: {
+            check_out_time: checkoutTime
+          }
+        });
+      }
+    }
+
+    // Also check previous day if it's before noon
+    if (currentHour < 12) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayDate = yesterday.toISOString().split('T')[0];
+
+      const pendingYesterdayCheckouts = await db.attendance.findMany({
+        where: {
+          date: new Date(yesterdayDate),
+          check_out_time: null,
+          check_in_time: {
+            not: null,
+          },
+        },
+      });
+
+      if (pendingYesterdayCheckouts.length > 0) {
+        const yesterdayCheckoutTime = new Date(yesterdayDate + 'T17:00:00');
+        
+        await db.attendance.updateMany({
+          where: {
+            id: {
+              in: pendingYesterdayCheckouts.map(record => record.id)
+            }
+          },
+          data: {
+            check_out_time: yesterdayCheckoutTime
+          }
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('Failed to process checkouts:', error);
+  }
+}
