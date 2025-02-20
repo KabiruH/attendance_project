@@ -13,23 +13,23 @@ export default function LoginPage() {
           <h1 className="text-4xl font-bold text-white mb-6">
             Welcome to our Attendance System
           </h1>
-          <p className="text-blue-100 text-lg mb-12">
+          <p className="text-blue-100 text-2xl mb-12">
             Streamline your attendance tracking with our modern, user-friendly platform.
           </p>
          
           {/* Feature List */}
           <div className="space-y-6">
             <div className="flex items-center space-x-4">
-              <Clock className="w-6 h-6 text-blue-200" />
-              <p className="text-white">Easy check-in and check-out</p>
+              <Clock className="w-9 h-9 text-blue-200" />
+              <p className="text-white text-xl">Easy check-in and check-out</p>
             </div>
             <div className="flex items-center space-x-4">
-              <Users className="w-6 h-6 text-blue-200" />
-              <p className="text-white">Track team attendance</p>
+              <Users className="w-9 h-9 text-blue-200" />
+              <p className="text-white text-xl">Track team attendance</p>
             </div>
             <div className="flex items-center space-x-4">
-              <Building2 className="w-6 h-6 text-blue-200" />
-              <p className="text-white">Multi-branch support</p>
+              <Building2 className="w-9 h-9 text-blue-200" />
+              <p className="text-white text-xl">Multi-branch support</p>
             </div>
           </div>
         </div>

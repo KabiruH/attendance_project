@@ -13,10 +13,9 @@ const loginSchema = z.object({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-
     const validatedData = loginSchema.parse(body);
-    
-    // Find employee with user status
+   
+    // Find employee with their user information
     const employee = await db.employees.findUnique({
       where: { email: validatedData.email },
       select: {
@@ -24,15 +23,15 @@ export async function POST(request: Request) {
         email: true,
         name: true,
         password: true,
-        role: true,
+        employee_id: true,  // This is the foreign key to Users table
         user: {
           select: {
-            is_active: true
+            is_active: true,
+            role: true  // Get role from Users table
           }
         }
       },
     });
-
 
     if (!employee) {
       return NextResponse.json(
@@ -55,8 +54,6 @@ export async function POST(request: Request) {
       employee.password
     );
 
-    console.log('Password match:', passwordMatch);
-
     if (!passwordMatch) {
       return NextResponse.json(
         { error: "Invalid credentials" },
@@ -75,28 +72,26 @@ export async function POST(request: Request) {
 
     // Create JWT token
     const token = await new SignJWT({
-      id: employee.id,
+      id: employee.id,  // Use Employees.id for attendance records
       email: employee.email,
-      role: employee.role,
+      role: employee.user.role,  // Use role from Users table
       name: employee.name
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('24h')
       .sign(new TextEncoder().encode(process.env.JWT_SECRET));
 
-    console.log('Token generated successfully');
-
     // Set HTTP-only cookie
     const response = NextResponse.json({
       user: {
-        id: employee.id,
+        id: employee.id,  // Use Employees.id for attendance records
         email: employee.email,
         name: employee.name,
-        role: employee.role,
+        role: employee.user.role,  // Use role from Users table
       },
       message: "Logged in successfully",
-    }, { 
-      status: 200 
+    }, {
+      status: 200
     });
 
     response.cookies.set('token', token, {
