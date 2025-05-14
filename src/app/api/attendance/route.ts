@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
     const currentDate = new Date().toISOString().split('T')[0];
     const autoProcessResult = await processAutomaticAttendance();
 
-    if (user.role === 'admin') {
+    if (user.role == 'admin') {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const attendanceData = await getAdminData(sevenDaysAgo);

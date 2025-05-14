@@ -83,8 +83,8 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {userData.role === 'admin' && <AdminDashboard data={userData} />}
-      {userData.role === 'employee' && <EmployeeDashboard data={userData} />}
+      {userData.role == 'admin' && <AdminDashboard data={userData} />}
+      {userData.role == 'employee' && <EmployeeDashboard data={userData} />}
     </div>
   );
 };

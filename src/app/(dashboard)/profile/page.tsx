@@ -6,6 +6,7 @@ import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { PasswordChangeForm } from '@/components/profile/PasswordChangeForm';
 import { ProfileEditForm } from '@/components/profile/ProfileEditForm';
 import { AttendanceStats } from '@/components/profile/AttendanceStats';
+import { BiometricRegistration } from '@/components/profile/BiometricRegistration';
 import { UserProfile, PasswordForm, AttendanceStats as AttendanceStatsType } from '@/lib/types/profile';
 import { useRouter } from 'next/navigation';
 
@@ -217,6 +218,9 @@ export default function ProfilePage() {
               isSubmitting={isSubmitting}
             />
           )}
+
+          {/* Biometric Registration Section */}
+          <BiometricRegistration userId={profile.id} />
 
           {stats && <AttendanceStats stats={stats} />}
         </>

@@ -84,8 +84,6 @@ export async function POST(request: Request) {
         }
       });
 
-      console.log('Employee account created successfully:', { id: employee.id, email: employee.email });
-
       return NextResponse.json({
         user: employee,
         message: "Account created successfully"

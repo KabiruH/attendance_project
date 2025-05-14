@@ -13,7 +13,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { cn } from '@/lib/utils/utils';
+import { cn } from '@/lib/utils';
 import type { AttendanceRecord, FilterState } from '@/components/reports/reportType';
 import { useToast } from "@/components/ui/use-toast";
 

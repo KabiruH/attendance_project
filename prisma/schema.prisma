@@ -19,6 +19,7 @@ model Users {
   updated_at    DateTime    @updatedAt
   created_by    String      @db.VarChar(100)
   Employee      Employees?  // One-to-one relation with Employees
+  webAuthnCredentials WebAuthnCredentials[] 
 
   @@map("Users")
   @@index([id_number])
@@ -77,4 +78,18 @@ model AttendanceProcessingLog {
   updated_at DateTime @updatedAt
 
   @@unique([date])
+}
+
+model WebAuthnCredentials {
+  id              String   @id @default(uuid())
+  userId          Int
+  user            Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId    String   @unique
+  publicKey       String
+  counter         Int
+  transports      String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@map("WebAuthnCredentials")
 }

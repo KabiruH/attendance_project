@@ -119,7 +119,7 @@ export function DashboardSidebar() {
 
   
 // Combine navigation items based on user role
-const navItems = currentUser?.role === 'admin'
+const navItems = currentUser?.role == 'admin'
   ? [
       ...baseNavItems.slice(0, 4), // Items before Users
       {

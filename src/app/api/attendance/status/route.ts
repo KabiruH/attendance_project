@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const role = payload.role as string;
     const today = new Date().toISOString().split('T')[0];
 
-    if (role === 'admin') {
+    if (role == 'admin') {
       const [personalAttendance, todayRecord, allAttendance] = await Promise.all([
         // Admin's personal monthly attendance
         db.attendance.findMany({
