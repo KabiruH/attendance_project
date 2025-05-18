@@ -20,6 +20,7 @@ model Users {
   created_by    String      @db.VarChar(100)
   Employee      Employees?  // One-to-one relation with Employees
   webAuthnCredentials WebAuthnCredentials[] 
+  webAuthnCredentialChallenge WebAuthnCredentialChallenge?
 
   @@map("Users")
   @@index([id_number])
@@ -92,4 +93,15 @@ model WebAuthnCredentials {
   updated_at      DateTime @updatedAt
 
   @@map("WebAuthnCredentials")
+}
+
+model WebAuthnCredentialChallenge {
+  userId    Int       @id
+  user      Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge String
+  expires   DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("WebAuthnCredentialChallenge")
 }
