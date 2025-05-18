@@ -28,9 +28,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
   const { toast } = useToast();
   
   // Debug - log received userId
-  useEffect(() => {
-    console.log("BiometricRegistration component received userId:", userId);
-    // Fetch the actual user ID from JWT on component mount
+  useEffect(() => { // Fetch the actual user ID from JWT on component mount
     fetchActualUserId();
   }, [userId]);
 
@@ -38,11 +36,8 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if (!window.PublicKeyCredential) {
-        console.log('WebAuthn not supported in this browser');
         setSupported(false);
-      } else {
-        console.log('WebAuthn is supported in this browser');
-      }
+      } 
     }
   }, []);
 
@@ -67,7 +62,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
       
       const data = await response.json();
-      console.log('Auth check response:', data);
       
       // Extract the User ID from the JWT payload
       // Assuming the JWT payload contains a field like 'userId' that 
@@ -80,7 +74,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         return;
       }
       
-      console.log('Actual User ID from JWT:', jwtUserId);
       setActualUserId(Number(jwtUserId));
     } catch (error) {
       console.error('Error checking authentication:', error);
@@ -93,13 +86,10 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
     
     setLoadingCredentials(true);
     try {
-      console.log('Fetching WebAuthn credentials...');
       
       const response = await fetch('/api/webauthn/credentials', {
         credentials: 'include',
       });
-
-      console.log('Credentials API response status:', response.status);
       
       if (response.status === 401) {
         setAuthError('You must be logged in to manage biometric credentials');
@@ -114,7 +104,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
 
       const data = await response.json();
-      console.log('Fetched credentials:', data);
       setRegisteredCredentials(data.credentials || []);
       setAuthError(null);
     } catch (err) {
@@ -145,7 +134,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       // Use the actual user ID from JWT instead of the prop
       const userIdToUse = actualUserId;
       
-      console.log('Requesting registration options for user ID:', userIdToUse);
       // 1. Get registration options from the server
       const optionsResponse = await fetch('/api/webauthn/generate-registration-options', {
         method: 'POST',
@@ -156,8 +144,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         body: JSON.stringify({ userId: userIdToUse }),
       });
 
-      console.log('Options API response status:', optionsResponse.status);
-      
       if (optionsResponse.status === 401) {
         setAuthError('You must be logged in to register biometrics');
         throw new Error('You must be logged in to register biometrics');
@@ -170,15 +156,11 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
 
       const options = await optionsResponse.json();
-      console.log('Registration options received:', { ...options, challenge: '[CHALLENGE_DATA_HIDDEN]' });
-
+    
       // 2. Pass the options to the browser's WebAuthn API
-      console.log('Starting registration with browser API...');
       const registrationResponse = await startRegistration(options);
-      console.log('Browser registration completed');
 
       // 3. Send the response to the server to verify and save
-      console.log('Sending verification to server...');
       const verificationResponse = await fetch('/api/webauthn/verify-registration', {
         method: 'POST',
         headers: {
@@ -198,7 +180,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
 
       const verificationResult = await verificationResponse.json();
-      console.log('Verification result:', verificationResult);
 
       // 4. Registration successful
       await fetchCredentials();
@@ -238,7 +219,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
 
   const removeCredential = async (credentialId: string) => {
     try {
-      console.log('Removing credential:', credentialId);
       const response = await fetch(`/api/webauthn/credentials/${credentialId}`, {
         method: 'DELETE',
         credentials: 'include',
