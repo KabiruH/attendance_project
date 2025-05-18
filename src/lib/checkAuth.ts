@@ -1,11 +1,10 @@
-// lib/auth/checkAuth.ts
+// lib/checkAuth.ts
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
-import { db } from '@/lib/db/db';
 
 export async function checkAuth() {
   try {
-    const cookieStore =await cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('token');
     
     if (!token) {
@@ -17,31 +16,28 @@ export async function checkAuth() {
       new TextEncoder().encode(process.env.JWT_SECRET)
     );
     
-    const userId = Number(payload.id);
+    // Check if the payload has the expected fields
+    if (!payload.id || !payload.email || !payload.role) {
+      console.error('Invalid token payload:', payload);
+      return { authenticated: false, error: 'Invalid token payload', status: 401 };
+    }
+
+    // The User ID should now be directly available in the JWT payload
+    const userId = payload.userId ? Number(payload.userId) : null;
     
-    // Get employee data with user relation
-    const employeeData = await db.employees.findUnique({
-      where: {
-        id: userId
-      },
-      include: {
-        user: true  // Include the related user data
-      }
-    });
-    
-    if (!employeeData) {
-      return { authenticated: false, error: 'Employee not found', status: 404 };
+    if (!userId) {
+      console.warn('No userId found in JWT payload. Token might be from an older login.');
     }
     
     return { 
       authenticated: true, 
       user: {
-        id: employeeData.id,
-        name: employeeData.name,
-        email: employeeData.email,
-        role: employeeData.role,
-        userId: employeeData.user.id, // This is the Users table ID
-        id_number: employeeData.user.id_number
+        id: Number(payload.id),            // Employee ID
+        email: String(payload.email),
+        name: String(payload.name),
+        role: String(payload.role),
+        userId: userId,                     // User ID from JWT (Users table)
+        id_number: payload.id_number ? String(payload.id_number) : undefined
       }
     };
   } catch (error) {

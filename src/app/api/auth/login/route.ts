@@ -26,8 +26,10 @@ export async function POST(request: Request) {
         employee_id: true,  // This is the foreign key to Users table
         user: {
           select: {
+            id: true,          // Added: Get the Users.id
             is_active: true,
-            role: true  // Get role from Users table
+            role: true,        // Get role from Users table
+            id_number: true    // Added: Get the id_number for reference
           }
         }
       },
@@ -70,12 +72,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create JWT token
+    // Create JWT token with BOTH Employee ID and User ID
     const token = await new SignJWT({
-      id: employee.id,  // Use Employees.id for attendance records
+      id: employee.id,                      // Employees.id for attendance records
       email: employee.email,
-      role: employee.user.role,  // Use role from Users table
-      name: employee.name
+      role: employee.user.role,             // Role from Users table
+      name: employee.name,
+      userId: employee.user.id,             // ADDED: User ID from Users table for WebAuthn
+      id_number: employee.user.id_number    // ADDED: ID number for reference
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('24h')
@@ -84,10 +88,11 @@ export async function POST(request: Request) {
     // Set HTTP-only cookie
     const response = NextResponse.json({
       user: {
-        id: employee.id,  // Use Employees.id for attendance records
+        id: employee.id,               // Employees.id for attendance records
         email: employee.email,
         name: employee.name,
-        role: employee.user.role,  // Use role from Users table
+        role: employee.user.role,      // Role from Users table
+        userId: employee.user.id       // ADDED: Include userId in response too
       },
       message: "Logged in successfully",
     }, {
