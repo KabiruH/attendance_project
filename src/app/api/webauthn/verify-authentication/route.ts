@@ -9,16 +9,12 @@ export async function POST(req: Request) {
   try {
     const { authenticationResponse, username } = await req.json();
     
-    console.log('Verifying authentication for username:', username);
-    console.log('Authentication response ID:', authenticationResponse.id.substring(0, 10) + '...');
-    
     // Find the user
     const user = await prisma.users.findUnique({
       where: { id_number: username },
     });
     
     if (!user) {
-      console.log(`User not found for ID number: ${username}`);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
@@ -28,7 +24,6 @@ export async function POST(req: Request) {
     });
     
     if (!challengeRecord || new Date() > challengeRecord.expires) {
-      console.log('Challenge not found or expired');
       return NextResponse.json(
         { error: 'Challenge not found or expired' },
         { status: 400 }
@@ -43,12 +38,10 @@ export async function POST(req: Request) {
     });
     
     if (!credential) {
-      console.log('Credential not found with direct ID match');
       
       // Try a different encoding as fallback
       try {
         const encodedId = Buffer.from(authenticationResponse.id, 'base64url').toString('base64url');
-        console.log('Trying alternative encoding:', encodedId.substring(0, 10) + '...');
         
         const altCredential = await prisma.webAuthnCredentials.findFirst({
           where: { 
@@ -57,11 +50,9 @@ export async function POST(req: Request) {
         });
         
         if (!altCredential) {
-          console.log('No credential found with alternative encoding');
           return NextResponse.json({ error: 'Credential not found' }, { status: 400 });
         }
         
-        console.log('Found credential with alternative encoding');
         return verifyWithCredential(altCredential, user, challengeRecord.challenge, authenticationResponse);
       } catch (error) {
         console.error('Error with alternative encoding attempt:', error);
@@ -89,15 +80,12 @@ async function verifyWithCredential(
 ) {
   // Verify that the credential belongs to the user
   if (credential.userId !== user.id) {
-    console.log(`Credential belongs to user ${credential.userId}, not ${user.id}`);
     return NextResponse.json(
       { error: 'Credential does not belong to user' },
       { status: 403 }
     );
   }
-  
-  console.log('Found valid credential and challenge, proceeding with verification');
-  
+    
   try {
     // For SimpleWebAuthn v13.1.1, the expected structure
     const verification = await verifyAuthenticationResponse({
@@ -115,24 +103,19 @@ async function verifyWithCredential(
     });
     
     if (!verification.verified) {
-      console.log('Verification failed');
       return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
     }
-    
-    console.log('Verification successful');
-    
+        
     // Update the counter
     await prisma.webAuthnCredentials.update({
       where: { id: credential.id },
       data: { counter: verification.authenticationInfo.newCounter },
     });
-    console.log('Updated credential counter');
     
     // Clean up the challenge
     await prisma.webAuthnCredentialChallenge.delete({
       where: { userId: user.id },
     });
-    console.log('Cleaned up challenge');
     
     // Get the employee associated with this user for authentication
     const employee = await prisma.employees.findUnique({
@@ -146,7 +129,6 @@ async function verifyWithCredential(
     });
     
     if (!employee) {
-      console.log('Employee record not found');
       return NextResponse.json({ error: 'Employee record not found' }, { status: 404 });
     }
     

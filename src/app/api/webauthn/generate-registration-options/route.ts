@@ -10,28 +10,22 @@ export async function POST(req: Request) {
     const authResult = await checkAuth();
 
     if (!authResult.authenticated || !authResult.user) {
-      console.log('Unauthorized:', authResult.error || 'No user in auth result');
       return NextResponse.json({ error: authResult.error || 'Unauthorized' }, { status: authResult.status || 401 });
     }
 
     const { userId } = await req.json();
-    console.log(`Received registration request for userId: ${userId}`);
-
     // Convert string ID to number if needed
     const userIdNum = typeof userId === 'string' ? parseInt(userId) : userId;
 
     // Verify that the user exists and matches the authenticated user's ID
     if (userIdNum !== authResult.user.userId) {
-      console.log(`User IDs do not match: ${userIdNum} vs ${authResult.user.userId}`);
       return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
     }
-
     const dbUser = await prisma.users.findUnique({
       where: { id: userIdNum },
     });
 
     if (!dbUser) {
-      console.log(`User not found in database: ${userIdNum}`);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -39,7 +33,6 @@ export async function POST(req: Request) {
     const existingCredentials = await prisma.webAuthnCredentials.findMany({
       where: { userId: userIdNum },
     });
-    console.log(`Found ${existingCredentials.length} existing credentials`);
 
     // Convert to correct format for excludeCredentials
     const excludeCredentials = existingCredentials.map(cred => ({
@@ -58,12 +51,11 @@ export async function POST(req: Request) {
       attestationType: 'none',
       excludeCredentials,
       authenticatorSelection: {
-        userVerification: 'preferred',
+        userVerification: 'discouraged',
         authenticatorAttachment: 'platform',
         residentKey: 'required',
       },
     });
-    console.log('Generated registration options');
 
     // Store challenge in database
     try {
@@ -91,7 +83,6 @@ export async function POST(req: Request) {
           },
         });
       }
-      console.log('Stored challenge in database');
     } catch (error) {
       console.error('Error storing challenge:', error);
       return NextResponse.json(

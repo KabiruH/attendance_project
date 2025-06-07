@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlserver"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -32,51 +32,51 @@ model Employees {
   name            String       @db.VarChar(100)  // For verification
   id_number       String       @db.VarChar(50)   // For verification
   role            String       @db.VarChar(20)   // For verification
-  email           String       @unique(map: "UQ_Employee_AB6E61647DECD8E0") @db.VarChar(100)
+  email           String       @unique @db.VarChar(100)
   password        String       @db.VarChar(255)
   date_of_birth   DateTime     @db.Date
   id_card_path    String       @db.VarChar(255)  // Path to stored ID card file
   passport_photo  String       @db.VarChar(255)  // Path to stored passport photo
-  created_at      DateTime     @default(now(), map: "DF_Employeescreat_3A81B327")
+  created_at      DateTime     @default(now())
   user            Users        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   Attendance      Attendance[]
-  PasswordReset PasswordReset[] 
+  PasswordReset   PasswordReset[] 
 
   @@index([id_number, role]) // Index for faster verification lookups
 }
 
 model Attendance {
-  id             Int       @id(map: "PK_Attendan_3213E83FBD2CD3D1") @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   employee_id    Int       
   date           DateTime  @db.Date
-  check_in_time  DateTime? @map("check_in_time")
-  check_out_time DateTime? @map("check_out_time")
-  status         String    @default("Absent", map: "DF_Attendancstatu_403A8C7D") @db.VarChar(10)
-  Employees      Employees @relation(fields: [employee_id], references: [id], onUpdate: NoAction, map: "FK_Attendancemplo_412EB0B6")
+  check_in_time  DateTime?
+  check_out_time DateTime?
+  status         String    @default("Absent") @db.VarChar(10)
+  Employees      Employees @relation(fields: [employee_id], references: [id])
 
   @@unique([employee_id, date])
 }
 
 model PasswordReset {
- id        Int      @id @default(autoincrement())
- employee_id Int
- token     String   @unique
- expires   DateTime
- used      Boolean  @default(false)
- employee  Employees @relation(fields: [employee_id], references: [id])
- created_at DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  employee_id  Int
+  token        String   @unique
+  expires      DateTime
+  used         Boolean  @default(false)
+  employee     Employees @relation(fields: [employee_id], references: [id])
+  created_at   DateTime @default(now())
 
   @@map("PasswordReset") 
   @@index([token])
 }
 
 model AttendanceProcessingLog {
-  id        Int      @id @default(autoincrement())
-  date      DateTime
+  id                Int      @id @default(autoincrement())
+  date              DateTime
   records_processed Int
-  status    String   // 'completed' | 'failed'
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  status            String   // 'completed' | 'failed'
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
 
   @@unique([date])
 }
@@ -86,7 +86,7 @@ model WebAuthnCredentials {
   userId          Int
   user            Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
   credentialId    String   @unique
-  publicKey       String
+  publicKey       String   @db.Text
   counter         Int
   transports      String?
   created_at      DateTime @default(now())
@@ -98,7 +98,7 @@ model WebAuthnCredentials {
 model WebAuthnCredentialChallenge {
   userId    Int       @id
   user      Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  challenge String
+  challenge String    @db.Text
   expires   DateTime
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
