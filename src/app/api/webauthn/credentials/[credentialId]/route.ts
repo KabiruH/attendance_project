@@ -5,7 +5,7 @@ import { checkAuth } from '@/lib/checkAuth';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { credentialId: string } }
+  { params }: { params: Promise<{ credentialId: string }> }
 ) {
   try {
     // Use the same auth check as profile route
@@ -16,7 +16,7 @@ export async function DELETE(
       return NextResponse.json({ error: authResult.error || 'Unauthorized' }, { status: authResult.status || 401 });
     }
 
-    const credentialId = params.credentialId;
+    const {credentialId} = await params;
     console.log(`Attempting to delete credential ID: ${credentialId}`);
     
     // Find the credential
