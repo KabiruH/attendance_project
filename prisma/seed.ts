@@ -6,10 +6,8 @@ const prisma = new PrismaClient()
 async function main() {
   const adminUsers = [
     {
-      name: 'John Doe',
-      id_number: 'EMP001',
-      employee_id: 1001,  // Use this for upsert
-      email: 'john.doe@company.com',  // Required field
+      name: 'admin',
+      id_number: 'ADM001',
       role: 'Admin',
       phone_number: '+1234567890',
       gender: 'Male',
@@ -18,9 +16,7 @@ async function main() {
     },
     {
       name: 'Jane Smith',
-      id_number: 'EMP002',
-      employee_id: 1002,  // Use this for upsert
-      email: 'jane.smith@company.com',  // Required field
+      id_number: 'EMP002', 
       role: 'Admin',
       phone_number: '+1234567891',
       gender: 'Female',
@@ -33,7 +29,7 @@ async function main() {
   
   for (const userData of adminUsers) {
     const user = await prisma.users.upsert({
-      where: { id_number: userData.id_number }, // Use employee_id instead
+      where: { id_number: userData.id_number }, 
       update: {},
       create: userData,
     })
