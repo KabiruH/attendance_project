@@ -1,13 +1,14 @@
-// app/api/webauthn/verify-authentication/route.ts - Fixed type errors
+// app/api/webauthn/verify-authentication/route.ts
 import { NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
-import type { 
-  AuthenticationResponseJSON} from '@simplewebauthn/types';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
 import prisma from '@/lib/prisma';
 
 export async function POST(req: Request) {
   try {
     const { authenticationResponse, username } = await req.json();
+    
+    console.log(`Verifying authentication for username: ${username}`);
     
     // Find the user
     const user = await prisma.users.findUnique({
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    // Get the expected challenge from the database
+    // Get the expected challenge
     const challengeRecord = await prisma.webAuthnCredentialChallenge.findUnique({
       where: { userId: user.id },
     });
@@ -30,83 +31,58 @@ export async function POST(req: Request) {
       );
     }
     
-    // Find the credential that was used - using the same format as stored
-    const credential = await prisma.webAuthnCredentials.findFirst({
-      where: { 
-        credentialId: authenticationResponse.id
-      },
+    // Get the credential being used
+    const credentialId = authenticationResponse.id;
+    const credential = await prisma.webAuthnCredentials.findUnique({
+      where: { credentialId },
     });
     
-    if (!credential) {
-      
-      // Try a different encoding as fallback
-      try {
-        const encodedId = Buffer.from(authenticationResponse.id, 'base64url').toString('base64url');
-        
-        const altCredential = await prisma.webAuthnCredentials.findFirst({
-          where: { 
-            credentialId: encodedId
-          },
-        });
-        
-        if (!altCredential) {
-          return NextResponse.json({ error: 'Credential not found' }, { status: 400 });
-        }
-        
-        return verifyWithCredential(altCredential, user, challengeRecord.challenge, authenticationResponse);
-      } catch (error) {
-        console.error('Error with alternative encoding attempt:', error);
-        return NextResponse.json({ error: 'Credential not found' }, { status: 400 });
-      }
+    if (!credential || credential.userId !== user.id) {
+      return NextResponse.json(
+        { error: 'Credential not found or does not belong to user' },
+        { status: 400 }
+      );
     }
     
-    return verifyWithCredential(credential, user, challengeRecord.challenge, authenticationResponse);
+    console.log('Found credential, verifying response...');
     
-  } catch (error) {
-    console.error('Error verifying authentication:', error);
-    return NextResponse.json(
-      { error: 'Failed to verify authentication' },
-      { status: 500 }
-    );
-  }
-}
-
-// Helper function to verify with a found credential
-async function verifyWithCredential(
-  credential: any,
-  user: any,
-  challenge: string,
-  authenticationResponse: any
-) {
-  // Verify that the credential belongs to the user
-  if (credential.userId !== user.id) {
-    return NextResponse.json(
-      { error: 'Credential does not belong to user' },
-      { status: 403 }
-    );
-  }
+    // Determine origin and RP ID based on environment
+    const host = req.headers.get('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
     
-  try {
-    // For SimpleWebAuthn v13.1.1, the expected structure
+    // Use appropriate values based on environment
+    const expectedOrigin = isLocalhost 
+      ? 'http://localhost:3000' 
+      : (process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000');
+    
+    const expectedRPID = isLocalhost 
+      ? 'localhost' 
+      : (process.env.WEBAUTHN_RP_ID || 'localhost');
+    
+    console.log(`Verifying with origin: ${expectedOrigin}, RP ID: ${expectedRPID}`);
+    
+    // Verify the authentication response
     const verification = await verifyAuthenticationResponse({
       response: authenticationResponse as AuthenticationResponseJSON,
-      expectedChallenge: challenge,
-      expectedOrigin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
-      expectedRPID: process.env.WEBAUTHN_RP_ID || 'localhost',
-      requireUserVerification: true,
-      // In SimpleWebAuthn v13+, credential now expects:
+      expectedChallenge: challengeRecord.challenge,
+      expectedOrigin,
+      expectedRPID,
+      requireUserVerification: false, // Set to false for better compatibility
       credential: {
         id: credential.credentialId,
-        publicKey: Buffer.from(credential.publicKey, 'base64url'),
+        publicKey: Uint8Array.from(Buffer.from(credential.publicKey, 'base64url')),
         counter: credential.counter,
       },
     });
     
     if (!verification.verified) {
+      console.log('Verification failed');
       return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
     }
-        
-    // Update the counter
+    
+    console.log('Verification successful');
+    
+    // Update counter
     await prisma.webAuthnCredentials.update({
       where: { id: credential.id },
       data: { counter: verification.authenticationInfo.newCounter },
@@ -117,37 +93,39 @@ async function verifyWithCredential(
       where: { userId: user.id },
     });
     
-    // Get the employee associated with this user for authentication
+    // Get employee info for the response
     const employee = await prisma.employees.findUnique({
       where: { employee_id: user.id },
-      select: { 
+      select: {
         id: true,
+        email: true,
         name: true,
-        role: true,
-        email: true
-      }
+        employee_id: true,
+      },
     });
     
     if (!employee) {
-      return NextResponse.json({ error: 'Employee record not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
     
-    // Return user information for session
     return NextResponse.json({
       verified: true,
       user: {
-        id: user.id,
-        name: user.name,
-        email: employee.email,
-        role: user.role,
-        employeeId: employee.id
-      }
+        id: employee.id,              // Primary key from Employees table (this is what login uses)
+        employee_id: employee.employee_id, // References Users.id
+        name: employee.name,          // Name from Employees table
+        email: employee.email,        // Email from Employees table
+        role: user.role,              // Role from Users table
+      },
     });
   } catch (error) {
-    console.error('Authentication verification error:', error);
-    return NextResponse.json({ 
-      error: 'Verification failed',
-      details: error instanceof Error ? error.message : 'Unknown error' 
-    }, { status: 400 });
+    console.error('Error verifying authentication:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to verify authentication',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

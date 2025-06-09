@@ -261,15 +261,14 @@ export default function LoginForm() {
           
           if (verificationResult.verified) {
             // 4. Using the server response to complete biometric login
-            console.log('Authentication verified, completing login');
             const loginResponse = await fetch('/api/auth/biometric-login', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: verificationResult.user.id,
-                employeeId: verificationResult.user.employeeId,
+              id: verificationResult.user.id,  
+                email: verificationResult.user.email,
               }),
             });
             

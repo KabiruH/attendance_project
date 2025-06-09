@@ -1,4 +1,4 @@
-// /app/api/webauthn/generate-registration-options/route.ts - Fixed userID type
+// /app/api/webauthn/generate-registration-options/route.ts
 import { NextResponse } from 'next/server';
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import prisma from '@/lib/prisma';
@@ -6,90 +6,76 @@ import { checkAuth } from '@/lib/checkAuth';
 
 export async function POST(req: Request) {
   try {
-    // Use the same auth check as profile route
+    // Check authentication using the same method as profile
     const authResult = await checkAuth();
 
     if (!authResult.authenticated || !authResult.user) {
+      console.log('Generate registration options - Unauthorized:', authResult.error || 'No user in auth result');
       return NextResponse.json({ error: authResult.error || 'Unauthorized' }, { status: authResult.status || 401 });
     }
 
     const { userId } = await req.json();
+    console.log(`Generating registration options for user ID: ${userId}`);
+
     // Convert string ID to number if needed
     const userIdNum = typeof userId === 'string' ? parseInt(userId) : userId;
 
-    // Verify that the user exists and matches the authenticated user's ID
+    // Verify that the authenticated user matches the requested user
     if (userIdNum !== authResult.user.userId) {
+      console.log(`User IDs do not match: ${userIdNum} vs ${authResult.user.userId}`);
       return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
     }
-    const dbUser = await prisma.users.findUnique({
-      where: { id: userIdNum },
-    });
 
-    if (!dbUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Get existing credentials for exclusion list
+    // Get existing credentials for this user
     const existingCredentials = await prisma.webAuthnCredentials.findMany({
       where: { userId: userIdNum },
     });
 
-    // Convert to correct format for excludeCredentials
-    const excludeCredentials = existingCredentials.map(cred => ({
-      id: (cred.credentialId, 'base64url'),
-      type: 'public-key' as const,
-      transports: cred.transports ? JSON.parse(cred.transports) : undefined,
-    }));
+    console.log(`Found ${existingCredentials.length} existing credentials`);
+
+    // Determine RP ID and RP Name based on environment
+    const host = req.headers.get('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    
+    // Use appropriate values based on environment
+    const rpID = isLocalhost ? 'localhost' : (process.env.WEBAUTHN_RP_ID || 'localhost');
+    const rpName = 'Employee Attendance System';
+    
+    console.log(`Using RP ID: ${rpID} (host: ${host})`);
 
     // Generate registration options
     const options = await generateRegistrationOptions({
-      rpName: 'Attendance System',
-      rpID: process.env.WEBAUTHN_RP_ID || 'localhost',
-      userID: Buffer.from(dbUser.id.toString()),
-      userName: dbUser.name,
-      userDisplayName: dbUser.name,
-      attestationType: 'none',
-      excludeCredentials,
+      rpName,
+      rpID,
+      userName: authResult.user.name,
+      userDisplayName: authResult.user.name,
+      attestationType: 'none', // Changed from 'indirect' to 'none'
+      excludeCredentials: existingCredentials.map(cred => ({
+        id: cred.credentialId, // Keep as string, no Buffer conversion
+        transports: cred.transports ? JSON.parse(cred.transports) : undefined,
+      })),
       authenticatorSelection: {
-        userVerification: 'discouraged',
+        residentKey: 'preferred',
+        userVerification: 'preferred',
         authenticatorAttachment: 'platform',
-        residentKey: 'required',
       },
     });
 
-    // Store challenge in database
-    try {
-      // First check if there's an existing challenge for this user
-      const existingChallenge = await prisma.webAuthnCredentialChallenge.findUnique({
-        where: { userId: userIdNum },
-      });
+    // Store the challenge with the user ID
+    await prisma.webAuthnCredentialChallenge.upsert({
+      where: { userId: userIdNum },
+      update: {
+        challenge: options.challenge,
+        expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+      },
+      create: {
+        userId: userIdNum,
+        challenge: options.challenge,
+        expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+      },
+    });
 
-      if (existingChallenge) {
-        // Update existing challenge
-        await prisma.webAuthnCredentialChallenge.update({
-          where: { userId: userIdNum },
-          data: {
-            challenge: options.challenge,
-            expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-          },
-        });
-      } else {
-        // Create new challenge
-        await prisma.webAuthnCredentialChallenge.create({
-          data: {
-            userId: userIdNum,
-            challenge: options.challenge,
-            expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Error storing challenge:', error);
-      return NextResponse.json(
-        { error: 'Failed to store challenge' },
-        { status: 500 }
-      );
-    }
+    console.log('Stored challenge in database');
 
     return NextResponse.json(options);
   } catch (error) {

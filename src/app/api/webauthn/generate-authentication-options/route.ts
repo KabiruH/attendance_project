@@ -1,14 +1,8 @@
-// app/api/webauthn/generate-authentication-options/route.ts - Secure context fix
+// app/api/webauthn/generate-authentication-options/route.ts
 import { NextResponse } from 'next/server';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/types';
 import prisma from '@/lib/prisma';
-
-// Define the expected type for allowCredentials items
-type AllowCredentialItem = {
-  id: string;
-  transports?: AuthenticatorTransportFuture[] | undefined;
-};
 
 export async function POST(req: Request) {
   try {
@@ -21,38 +15,13 @@ export async function POST(req: Request) {
     
     console.log(`Generating authentication options for username: ${username}`);
     
-    // Extract origin from request for security validation
-    const origin = req.headers.get('origin') || '';
+    // Determine RP ID based on environment
     const host = req.headers.get('host') || '';
-    console.log(`Request origin: ${origin}, host: ${host}`);
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
     
-    // Determine correct RP ID based on the host
-    // For development: localhost or IP address
-    // For production: your actual domain
-    const isLocalhost = host.includes('localhost') || /^127\.0\.0\.1/.test(host);
-    const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}/.test(host);
-    
-    // Default fallback RP ID
-    let rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
-    
-    // Set RP ID based on current environment
-    if (isLocalhost) {
-      rpID = 'localhost';
-    } else if (isIPAddress) {
-      // IP addresses are tricky with WebAuthn - depending on browser
-      const ipMatch = host.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-      if (ipMatch) {
-        rpID = ipMatch[1];
-        console.log(`Using IP address as RP ID: ${rpID}`);
-      }
-    } else {
-      // Extract domain from host (remove port if present)
-      const domainMatch = host.match(/^([^:]+)/);
-      if (domainMatch) {
-        rpID = domainMatch[1];
-        console.log(`Using domain as RP ID: ${rpID}`);
-      }
-    }
+    // Use localhost for local development, otherwise use the environment variable
+    const rpID = isLocalhost ? 'localhost' : (process.env.WEBAUTHN_RP_ID || 'localhost');
+    console.log(`Using RP ID: ${rpID} (host: ${host})`);
     
     // Find the user by ID number
     const user = await prisma.users.findUnique({
@@ -78,77 +47,54 @@ export async function POST(req: Request) {
     
     console.log(`Found ${user.webAuthnCredentials.length} credentials for user ID: ${user.id}`);
     
-    // Create an empty array of the correct type first
-    const allowCredentials: AllowCredentialItem[] = [];
-    
-    // Then populate it with valid credentials
-    for (const cred of user.webAuthnCredentials) {
-      try {
-        // Log credential details for debugging
-        console.log(`Processing credential ${cred.id}, type: ${typeof cred.credentialId}`);
-        
-        const item: AllowCredentialItem = {
-          id: cred.credentialId,
-        };
-        
-        if (cred.transports) {
-          try {
-            item.transports = JSON.parse(cred.transports) as AuthenticatorTransportFuture[];
-          } catch (e) {
-            console.warn(`Could not parse transports for credential ${cred.id}:`, e);
-          }
+    // Map credentials to the format expected by generateAuthenticationOptions
+    const allowCredentials = user.webAuthnCredentials.map(cred => {
+      const credential: {
+        id: string;
+        type: 'public-key';
+        transports?: AuthenticatorTransportFuture[];
+      } = {
+        id: cred.credentialId,
+        type: 'public-key',
+      };
+      
+      // Add transports if available
+      if (cred.transports) {
+        try {
+          credential.transports = JSON.parse(cred.transports) as AuthenticatorTransportFuture[];
+        } catch (e) {
+          console.warn(`Could not parse transports for credential ${cred.id}:`, e);
         }
-        
-        allowCredentials.push(item);
-        console.log(`Added credential: ${item.id.substring(0, 10)}...`);
-      } catch (error) {
-        console.error('Error preparing credential:', error);
-        // Skip this credential if there's an error
       }
-    }
+      
+      console.log(`Added credential: ${credential.id.substring(0, 10)}...`);
+      return credential;
+    });
     
-    if (allowCredentials.length === 0) {
-      console.log('No valid credentials found');
-      return NextResponse.json(
-        { error: 'No valid credentials found for user' },
-        { status: 400 }
-      );
-    }
-    
-    // Generate authentication options with proper typing
+    // Generate authentication options
     const options = await generateAuthenticationOptions({
-      // Use the dynamically determined RP ID
       rpID,
       allowCredentials,
-      userVerification: 'preferred',
+      userVerification: 'preferred', // Changed from 'required' to 'preferred' for better compatibility
       timeout: 60000, // 1 minute timeout
     });
     
+    console.log('Generated options with challenge:', options.challenge.substring(0, 10) + '...');
+    
     try {
-      // First check if there's an existing challenge for this user
-      const existingChallenge = await prisma.webAuthnCredentialChallenge.findUnique({
+      // Store or update the challenge
+      await prisma.webAuthnCredentialChallenge.upsert({
         where: { userId: user.id },
+        update: {
+          challenge: options.challenge,
+          expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+        },
+        create: {
+          userId: user.id,
+          challenge: options.challenge,
+          expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+        },
       });
-      
-      if (existingChallenge) {
-        // Update existing challenge
-        await prisma.webAuthnCredentialChallenge.update({
-          where: { userId: user.id },
-          data: {
-            challenge: options.challenge,
-            expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-          },
-        });
-      } else {
-        // Create new challenge
-        await prisma.webAuthnCredentialChallenge.create({
-          data: {
-            userId: user.id,
-            challenge: options.challenge,
-            expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-          },
-        });
-      }
       console.log('Stored challenge in database');
     } catch (error) {
       console.error('Error storing challenge:', error);

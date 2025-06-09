@@ -42,13 +42,28 @@ export async function POST(req: Request) {
 
     console.log('Found valid challenge, proceeding with verification');
 
+    // Determine origin and RP ID based on environment
+    const host = req.headers.get('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    
+    // Use appropriate values based on environment
+    const expectedOrigin = isLocalhost 
+      ? 'http://localhost:3000' 
+      : (process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000');
+    
+    const expectedRPID = isLocalhost 
+      ? 'localhost' 
+      : (process.env.WEBAUTHN_RP_ID || 'localhost');
+    
+    console.log(`Verifying registration with origin: ${expectedOrigin}, RP ID: ${expectedRPID}`);
+
     // Verify the registration response
     try {
       const verification = await verifyRegistrationResponse({
         response: registrationResponse as RegistrationResponseJSON,
         expectedChallenge: challengeRecord.challenge,
-        expectedOrigin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
-        expectedRPID: process.env.WEBAUTHN_RP_ID || 'localhost',
+        expectedOrigin,
+        expectedRPID,
         requireUserVerification: true,
       });
 
