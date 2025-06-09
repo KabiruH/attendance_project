@@ -18,6 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Employee Attendance",
   description: "To check the attendance of employees",
+    viewport: "width=device-width, initial-scale=1", 
 };
 
 export default function RootLayout({
@@ -26,13 +27,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+   <html lang="en">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <div className="flex min-h-screen flex-col">
-          <Navbar />
-          {children}
+          <div className="sticky top-0 z-50 w-full">
+            <Navbar />
+          </div>
+          <main className="flex-1 w-full overflow-x-auto">
+            {children}
+          </main>
+          
           <Toaster />
           <SpeedInsights />
         </div>

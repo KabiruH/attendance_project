@@ -8,7 +8,7 @@ async function main() {
     {
       name: 'admin',
       id_number: 'ADM001',
-      role: 'Admin',
+      role: 'admin',
       phone_number: '+1234567890',
       gender: 'Male',
       is_active: true,
@@ -17,7 +17,7 @@ async function main() {
     {
       name: 'Jane Smith',
       id_number: 'EMP002', 
-      role: 'Admin',
+      role: 'admin',
       phone_number: '+1234567891',
       gender: 'Female',
       is_active: true,

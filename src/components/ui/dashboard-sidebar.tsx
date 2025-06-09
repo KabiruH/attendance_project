@@ -4,6 +4,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { LayoutDashboard, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon } from "lucide-react";
 import { usePathname, useRouter } from 'next/navigation';
@@ -31,6 +32,7 @@ export function DashboardSidebar() {
   const router = useRouter();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { setOpen, isMobile } = useSidebar();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -80,6 +82,13 @@ export function DashboardSidebar() {
         description: "Failed to log out",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleNavClick = () => {
+    // Close sidebar on mobile after clicking a link
+    if (isMobile) {
+      setOpen(false);
     }
   };
 
@@ -147,6 +156,7 @@ const navItems = currentUser?.role == 'admin'
                   {item.type === 'link' ? (
                     <Link
                       href={item.href}
+                      onClick={handleNavClick}
                       className={`flex items-center space-x-3 p-3 rounded-lg
                         transition-all duration-200
                         ${pathname === item.href 
@@ -161,7 +171,10 @@ const navItems = currentUser?.role == 'admin'
                     </Link>
                   ) : (
                     <button
-                      onClick={item.action}
+                      onClick={() => {
+                        item.action?.();
+                        handleNavClick();
+                      }}
                       className="w-full flex items-center space-x-3 p-3 rounded-lg
                         text-black hover:bg-red-600 
                         transition-all duration-200 text-left"
