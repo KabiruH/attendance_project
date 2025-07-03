@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
-      userName: authResult.user.name,
+      userName: authResult.user.id_number ?? '',
       userDisplayName: authResult.user.name,
       attestationType: 'none', // Changed from 'indirect' to 'none'
       excludeCredentials: existingCredentials.map(cred => ({

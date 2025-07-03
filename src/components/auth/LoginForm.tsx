@@ -33,11 +33,7 @@ export default function LoginForm() {
             console.warn('NOT running in a secure context - WebAuthn may not work');
           }
           
-          // Log current domain info
-          console.log('Current hostname:', window.location.hostname);
-          console.log('Current origin:', window.location.origin);
         } else {
-          console.log('WebAuthn is NOT supported in this browser');
           setBiometricSupported(false);
         }
       } catch (error) {
@@ -140,7 +136,6 @@ export default function LoginForm() {
       }
       
       // Find user ID number from email
-      console.log('Looking up ID number for email:', email);
       const idLookupResponse = await fetch('/api/auth/get-id-from-email', {
         method: 'POST',
         headers: {
@@ -165,14 +160,12 @@ export default function LoginForm() {
       }
       
       const { idNumber } = await idLookupResponse.json();
-      console.log('Retrieved ID number:', idNumber);
       
       if (!idNumber) {
         throw new Error('Could not determine your ID number');
       }
       
       // 1. Request authentication options from server
-      console.log('Requesting authentication options');
       const optionsResponse = await fetch('/api/webauthn/generate-authentication-options', {
         method: 'POST',
         headers: {
@@ -226,20 +219,14 @@ export default function LoginForm() {
       if (!options.timeout) {
         options.timeout = 60000; // 1 minute
       }
-      
-      // 2. Start the authentication process in the browser
-      // Ensure this is called directly from a user action
-      console.log('Starting authentication with browser WebAuthn API');
-      
+   
       // Force a user gesture if needed by using a timeout to ensure the call is associated with the click
       setTimeout(async () => {
         try {
           const authenticationResponse = await startAuthentication(options);
-          console.log('WebAuthn authentication completed successfully');
-          
+        
           // 3. Send the response to the server for verification
-          console.log('Sending authentication response to server for verification');
-          const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
+            const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -257,7 +244,6 @@ export default function LoginForm() {
           }
           
           const verificationResult = await verificationResponse.json();
-          console.log('Verification result:', verificationResult);
           
           if (verificationResult.verified) {
             // 4. Using the server response to complete biometric login
