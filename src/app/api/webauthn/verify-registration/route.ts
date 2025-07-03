@@ -18,25 +18,26 @@ export async function POST(req: Request) {
     const { registrationResponse, id_number } = await req.json();
 
     // Verify that the user matches the authenticated user
-   if (!id_number || typeof id_number !== 'string') {
-      console.log(`User IDs do not match: ${id_number} vs ${authResult.user.userId}`);
-      return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
-    }
+if (!id_number || typeof id_number !== 'string') {
+  console.log(`Invalid or missing id_number:`, id_number);
+  return NextResponse.json({ error: 'Invalid user identifier' }, { status: 400 });
+}
 
-  // Look up user using id_number
-    const user = await prisma.users.findUnique({
-      where: { id_number },
-    });
+// Look up the user
+const user = await prisma.users.findUnique({
+  where: { id_number },
+});
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+if (!user) {
+  console.log(`User not found for id_number: ${id_number}`);
+  return NextResponse.json({ error: 'User not found' }, { status: 404 });
+}
 
-    // Ensure the authenticated user matches the one retrieved
-    if (user.id !== authResult.user.userId) {
-      console.log(`User IDs do not match: ${user.id} vs ${authResult.user.userId}`);
-      return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
-    }
+// Check that the authenticated user is the same
+if (user.id !== authResult.user.userId) {
+  console.log(`User IDs do not match: ${user.id} vs ${authResult.user.userId}`);
+  return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
+}
 
     // Get the expected challenge from the database
     const challengeRecord = await prisma.webAuthnCredentialChallenge.findUnique({
