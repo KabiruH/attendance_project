@@ -1,4 +1,4 @@
-// components/profile/BiometricRegistration.tsx - Using existing auth/check endpoint
+// components/profile/BiometricRegistration.tsx - Fixed version
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -25,6 +25,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
   const [supported, setSupported] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [actualUserId, setActualUserId] = useState<number | null>(null);
+  const [idNumber, setIdNumber] = useState<string | null>(null); // ✅ Add state for id_number
   const { toast } = useToast();
   
   // Debug - log received userId
@@ -54,14 +55,15 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       const response = await fetch('/api/auth/check', {
         credentials: 'include',
       });
+      const data = await response.json();
       
       if (!response.ok) {
         console.error('Failed to fetch current user data');
         setAuthError('Authentication failed. Please log in again.');
         return;
       }
-      
-      const data = await response.json();
+
+      const id_number = data.user?.id_number;
       
       // Extract the User ID from the JWT payload
       // Assuming the JWT payload contains a field like 'userId' that 
@@ -75,6 +77,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
       
       setActualUserId(Number(jwtUserId));
+      setIdNumber(id_number); // ✅ Store id_number in state
     } catch (error) {
       console.error('Error checking authentication:', error);
       setAuthError('Authentication error occurred');
@@ -128,6 +131,15 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       return;
     }
     
+    if (!idNumber) {
+      toast({
+        title: "Error",
+        description: "Could not determine your ID number",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsRegistering(true);
     
     try {
@@ -169,7 +181,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         credentials: 'include',
         body: JSON.stringify({
           registrationResponse,
-          userId: userIdToUse,
+          id_number: idNumber, 
         }),
       });
 
@@ -364,7 +376,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       <CardFooter>
         <Button 
           onClick={registerBiometric} 
-          disabled={isRegistering || !actualUserId} 
+          disabled={isRegistering || !actualUserId || !idNumber} 
           className="w-full"
         >
           {isRegistering ? (
