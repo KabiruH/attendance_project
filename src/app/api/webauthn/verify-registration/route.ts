@@ -15,33 +15,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: authResult.error || 'Unauthorized' }, { status: authResult.status || 401 });
     }
 
-    const { registrationResponse, id_number } = await req.json();
+    const { registrationResponse, userId } = await req.json();
+    console.log(`Verifying registration for user ID: ${userId}`);
+
+    // Convert string ID to number if needed
+    const userIdNum = typeof userId === 'string' ? parseInt(userId) : userId;
 
     // Verify that the user matches the authenticated user
-if (!id_number || typeof id_number !== 'string') {
-  console.log(`Invalid or missing id_number:`, id_number);
-  return NextResponse.json({ error: 'Invalid user identifier' }, { status: 400 });
-}
-
-// Look up the user
-const user = await prisma.users.findUnique({
-  where: { id_number },
-});
-
-if (!user) {
-  console.log(`User not found for id_number: ${id_number}`);
-  return NextResponse.json({ error: 'User not found' }, { status: 404 });
-}
-
-// Check that the authenticated user is the same
-if (user.id !== authResult.user.userId) {
-  console.log(`User IDs do not match: ${user.id} vs ${authResult.user.userId}`);
-  return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
-}
+    if (userIdNum !== authResult.user.userId) {
+      console.log(`User IDs do not match: ${userIdNum} vs ${authResult.user.userId}`);
+      return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
+    }
 
     // Get the expected challenge from the database
     const challengeRecord = await prisma.webAuthnCredentialChallenge.findUnique({
-      where: { userId: user.id },
+      where: { userId: userIdNum },
     });
 
     if (!challengeRecord || new Date() > challengeRecord.expires) {
@@ -101,7 +89,7 @@ if (user.id !== authResult.user.userId) {
 
       const newCredential = await prisma.webAuthnCredentials.create({
         data: {
-          userId: user.id,
+          userId: userIdNum,
           credentialId: credentialIdBase64,
           publicKey: Buffer.from(credentialPublicKey).toString('base64url'),
           counter,
@@ -114,7 +102,7 @@ if (user.id !== authResult.user.userId) {
 
       // Clean up the challenge
       await prisma.webAuthnCredentialChallenge.delete({
-        where: { userId: user.id },
+        where: { userId: userIdNum },
       });
       console.log('Cleaned up challenge');
 
