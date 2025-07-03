@@ -15,21 +15,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: authResult.error || 'Unauthorized' }, { status: authResult.status || 401 });
     }
 
-    const { registrationResponse, userId } = await req.json();
-    console.log(`Verifying registration for user ID: ${userId}`);
-
-    // Convert string ID to number if needed
-    const userIdNum = typeof userId === 'string' ? parseInt(userId) : userId;
+    const { registrationResponse, id_number } = await req.json();
 
     // Verify that the user matches the authenticated user
-    if (userIdNum !== authResult.user.userId) {
-      console.log(`User IDs do not match: ${userIdNum} vs ${authResult.user.userId}`);
+   if (!id_number || typeof id_number !== 'string') {
+      console.log(`User IDs do not match: ${id_number} vs ${authResult.user.userId}`);
+      return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
+    }
+
+  // Look up user using id_number
+    const user = await prisma.users.findUnique({
+      where: { id_number },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Ensure the authenticated user matches the one retrieved
+    if (user.id !== authResult.user.userId) {
+      console.log(`User IDs do not match: ${user.id} vs ${authResult.user.userId}`);
       return NextResponse.json({ error: 'Unauthorized to register for this user' }, { status: 403 });
     }
 
     // Get the expected challenge from the database
     const challengeRecord = await prisma.webAuthnCredentialChallenge.findUnique({
-      where: { userId: userIdNum },
+      where: { userId: user.id },
     });
 
     if (!challengeRecord || new Date() > challengeRecord.expires) {
@@ -89,7 +100,7 @@ export async function POST(req: Request) {
 
       const newCredential = await prisma.webAuthnCredentials.create({
         data: {
-          userId: userIdNum,
+          userId: user.id,
           credentialId: credentialIdBase64,
           publicKey: Buffer.from(credentialPublicKey).toString('base64url'),
           counter,
@@ -102,7 +113,7 @@ export async function POST(req: Request) {
 
       // Clean up the challenge
       await prisma.webAuthnCredentialChallenge.delete({
-        where: { userId: userIdNum },
+        where: { userId: user.id },
       });
       console.log('Cleaned up challenge');
 
