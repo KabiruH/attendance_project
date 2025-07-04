@@ -1,5 +1,5 @@
 // lib/auth.ts
-import { jwtVerify, SignJWT } from 'jose';
+import { jwtVerify } from 'jose';
 
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
