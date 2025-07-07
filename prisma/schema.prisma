@@ -13,6 +13,7 @@ model Users {
   id_number     String      @unique @db.VarChar(50)
   role          String      @db.VarChar(20)
   phone_number  String      @db.VarChar(20)
+  department    String      @db.VarChar(20)
   gender        String      @db.VarChar(10)
   is_active     Boolean     @default(true)
   created_at    DateTime    @default(now())

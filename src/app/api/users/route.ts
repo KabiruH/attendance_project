@@ -11,6 +11,7 @@ const createUserSchema = z.object({
   role: z.string().min(1, "Role is required"),
   phone_number: z.string().min(1, "Phone number is required"),
   gender: z.string().min(1, "Gender is required"),
+  department: z.string().min(1, "Department is required"),
 });
 
 // Validation schema for updating a user
@@ -21,6 +22,7 @@ const updateUserSchema = z.object({
   role: z.string().min(1, "Role is required").optional(),
   phone_number: z.string().min(1, "Phone number is required").optional(),
   gender: z.string().min(1, "Gender is required").optional(),
+  department: z.string().min(1, "Department is required").optional(),
   is_active: z.boolean().optional(),
 });
 
@@ -70,6 +72,7 @@ export async function GET(request: Request) {
       role: user.role,
       phone_number: user.phone_number,
       gender: user.gender,
+      department: user.department,
       is_active: user.is_active,
       created_at: user.created_at,
       // Employee data if it exists
@@ -237,6 +240,7 @@ export async function PUT(request: Request) {
         role: true,
         phone_number: true,
         gender: true,
+        department: true,
         is_active: true,
         created_at: true,
         updated_at: true

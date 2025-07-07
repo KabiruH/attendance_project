@@ -6,11 +6,12 @@ const prisma = new PrismaClient()
 async function main() {
   const adminUsers = [
     {
-      name: 'admin',
+      name: 'Kelvin',
       id_number: 'ADM001',
       role: 'admin',
       phone_number: '+1234567890',
       gender: 'Male',
+      department: 'executive',
       is_active: true,
       created_by: 'System'
     },
@@ -20,6 +21,7 @@ async function main() {
       role: 'admin',
       phone_number: '+1234567891',
       gender: 'Female',
+      department: 'executive',
       is_active: true,
       created_by: 'System'
     }

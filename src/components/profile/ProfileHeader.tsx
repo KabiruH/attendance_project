@@ -17,6 +17,7 @@ export function ProfileHeader({
   phone_number, 
   id_number,
   gender,
+  department,
   created_at,
   passport_photo,
   id_card_path,
@@ -26,6 +27,8 @@ export function ProfileHeader({
 }: ProfileHeaderProps) {
   const formattedDate = new Date(created_at).toLocaleDateString();
   const formattedDOB = new Date(date_of_birth).toLocaleDateString();
+
+  
 
   return (
     <div className="flex flex-col md:flex-row md:items-start gap-6">
@@ -70,6 +73,10 @@ export function ProfileHeader({
             <div className="flex items-center text-gray-600">
               <Phone className="w-4 h-4 mr-2" />
               {phone_number}
+            </div>
+            <div className="flex items-center text-gray-600">
+              <FileText className="w-4 h-4 mr-2" />
+              Department: {department}
             </div>
             <div className="flex items-center text-gray-600">
               <UserCircle className="w-4 h-4 mr-2" />

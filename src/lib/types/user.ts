@@ -1,5 +1,6 @@
 // types/user.ts
 export interface User {
+    department: string;
     id: number;
     name: string;
     id_number: string;

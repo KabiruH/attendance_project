@@ -4,6 +4,7 @@ export interface UserProfile {
     name: string;
     email: string;
     role: string;
+    department: string;
     // Employee specific fields
     date_of_birth: string;
     id_card_path: string;

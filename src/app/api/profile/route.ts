@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
             passport_photo: employeeData.passport_photo,
             // User specific fields
             id_number: employeeData.user.id_number,
+            department: employeeData.user.department,
             phone_number: employeeData.user.phone_number,
             gender: employeeData.user.gender,
             created_at: employeeData.user.created_at.toISOString()

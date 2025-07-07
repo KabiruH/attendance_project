@@ -100,15 +100,13 @@ async function handlePasswordLogin(body: any) {
 
 async function handleBiometricLogin(body: any) {
   const validatedData = biometricLoginSchema.parse(body);
-  
-  // Find employee by email (since we have it from the frontend)
-  const employee = await db.employees.findUnique({
+    const employee = await db.employees.findUnique({
     where: { email: validatedData.email },
     select: {
       id: true,
       email: true,
       name: true,
-      employee_id: true,  // This is the foreign key to Users table
+      employee_id: true,  
       user: {
         select: {
           id: true,          // Get the Users.id

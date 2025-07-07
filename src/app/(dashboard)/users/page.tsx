@@ -44,6 +44,7 @@ export default function UsersPage() {
     role: '',
     phone_number: '',
     gender: '',
+    department: '',
     is_active: true
   });
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -75,6 +76,7 @@ export default function UsersPage() {
       role: '',
       phone_number: '',
       gender: '',
+      department: '',
       is_active: true
     });
     setError('');
@@ -89,6 +91,7 @@ export default function UsersPage() {
       role: user.role,
       phone_number: user.phone_number,
       gender: user.gender,
+      department: user.department,
       is_active: user.is_active
     });
     setError('');
@@ -103,7 +106,7 @@ export default function UsersPage() {
     try {
       const url = '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
-      const body = editingUser 
+      const body = editingUser
         ? { ...formData, id: editingUser.id }
         : formData;
 
@@ -129,6 +132,7 @@ export default function UsersPage() {
         role: '',
         phone_number: '',
         gender: '',
+        department: '',
         is_active: true
       });
       setEditingUser(null);
@@ -145,7 +149,7 @@ export default function UsersPage() {
 
   const confirmDeactivate = async () => {
     if (!deactivatingUser) return;
-    
+
     setIsDeactivating(true);
     try {
       const response = await fetch(`/api/users/deactivate/${deactivatingUser.id}`, {
@@ -164,15 +168,15 @@ export default function UsersPage() {
       setIsDeactivating(false);
       setDeactivatingUser(null);
     }
-};
+  };
 
-if (isLoading) {
-  return (
-    <div className="flex justify-center items-center min-h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-    </div>
-  );
-}
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-10">
@@ -205,7 +209,7 @@ if (isLoading) {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="id_number">ID Number</Label>
                 <Input
@@ -240,6 +244,32 @@ if (isLoading) {
                   onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="department">Department</Label>
+                <Select
+                  value={formData.department}
+                  onValueChange={(value) => setFormData({ ...formData, department: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="finance">Finance</SelectItem>
+                    <SelectItem value="hr">Human Resources</SelectItem>
+                    <SelectItem value="engineering">Engineering</SelectItem>
+                    <SelectItem value="marketing">Marketing</SelectItem>
+                    <SelectItem value="sales">Sales</SelectItem>
+                    <SelectItem value="operations">Operations</SelectItem>
+                    <SelectItem value="customer-service">Customer Service</SelectItem>
+                    <SelectItem value="legal">Legal</SelectItem>
+                    <SelectItem value="it">IT</SelectItem>
+                    <SelectItem value="procurement">Procurement</SelectItem>
+                    <SelectItem value="admin">Administration</SelectItem>
+                    <SelectItem value="executive">Executive</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -295,15 +325,15 @@ if (isLoading) {
           </DialogContent>
         </Dialog>
       </div>
-      <AlertDialog 
-        open={!!deactivatingUser} 
+      <AlertDialog
+        open={!!deactivatingUser}
         onOpenChange={() => setDeactivatingUser(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate User Account</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to deactivate {deactivatingUser?.name}&apos;s account? 
+              Are you sure you want to deactivate {deactivatingUser?.name}&apos;s account?
               They will no longer be able to log in to their account.
             </AlertDialogDescription>
           </AlertDialogHeader>
