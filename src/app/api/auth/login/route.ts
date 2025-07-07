@@ -19,17 +19,33 @@ const biometricLoginSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const clientIP = getClientIP(request);
+  const userAgent = request.headers.get('user-agent') || 'Unknown';
+  let body: any = null;
+  
   try {
-    const body = await request.json();
+    body = await request.json();
     
     // Check if this is biometric authentication
     if (body.biometricAuth === true) {
-      return handleBiometricLogin(body);
+      return handleBiometricLogin(body, clientIP, userAgent);
     } else {
-      return handlePasswordLogin(body);
+      return handlePasswordLogin(body, clientIP, userAgent);
     }
   } catch (error) {
     console.error('Detailed login error:', error);
+    
+    // Log the error attempt if we have email
+    if (body?.email) {
+      await logLoginAttempt({
+        email: body.email,
+        ip_address: clientIP,
+        user_agent: userAgent,
+        status: 'failed',
+        failure_reason: 'server_error',
+        login_method: body.biometricAuth ? 'biometric' : 'password'
+      });
+    }
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -44,7 +60,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function handlePasswordLogin(body: any) {
+async function handlePasswordLogin(body: any, clientIP: string, userAgent: string) {
   const validatedData = loginSchema.parse(body);
   
   // Find employee with their user information
@@ -55,27 +71,48 @@ async function handlePasswordLogin(body: any) {
       email: true,
       name: true,
       password: true,
-      employee_id: true,  // This is the foreign key to Users table
+      employee_id: true,
       user: {
         select: {
-          id: true,          // Added: Get the Users.id
+          id: true,
           is_active: true,
-          role: true,        // Get role from Users table
-          id_number: true    // Added: Get the id_number for reference
+          role: true,
+          id_number: true
         }
       }
     },
   });
   
+  // Log attempt - user not found
   if (!employee) {
+    await logLoginAttempt({
+      email: validatedData.email,
+      ip_address: clientIP,
+      user_agent: userAgent,
+      status: 'failed',
+      failure_reason: 'user_not_found',
+      login_method: 'password'
+    });
+    
     return NextResponse.json(
       { error: "Invalid credentials" },
       { status: 401 }
     );
   }
   
-  // Check if user is active
+  // Log attempt - account inactive
   if (!employee.user?.is_active) {
+    await logLoginAttempt({
+      user_id: employee.user?.id,
+      employee_id: employee.id,
+      email: validatedData.email,
+      ip_address: clientIP,
+      user_agent: userAgent,
+      status: 'blocked',
+      failure_reason: 'account_inactive',
+      login_method: 'password'
+    });
+    
     return NextResponse.json(
       { error: "Your account has been deactivated. Please contact administrator." },
       { status: 403 }
@@ -88,45 +125,90 @@ async function handlePasswordLogin(body: any) {
     employee.password
   );
   
+  // Log attempt - wrong password
   if (!passwordMatch) {
+    await logLoginAttempt({
+      user_id: employee.user?.id,
+      employee_id: employee.id,
+      email: validatedData.email,
+      ip_address: clientIP,
+      user_agent: userAgent,
+      status: 'failed',
+      failure_reason: 'invalid_password',
+      login_method: 'password'
+    });
+    
     return NextResponse.json(
       { error: "Invalid credentials" },
       { status: 401 }
     );
   }
   
+  // Log successful login
+  await logLoginAttempt({
+    user_id: employee.user?.id,
+    employee_id: employee.id,
+    email: validatedData.email,
+    ip_address: clientIP,
+    user_agent: userAgent,
+    status: 'success',
+    login_method: 'password'
+  });
+  
   return createAuthResponse(employee);
 }
 
-async function handleBiometricLogin(body: any) {
+async function handleBiometricLogin(body: any, clientIP: string, userAgent: string) {
   const validatedData = biometricLoginSchema.parse(body);
-    const employee = await db.employees.findUnique({
+  
+  const employee = await db.employees.findUnique({
     where: { email: validatedData.email },
     select: {
       id: true,
       email: true,
       name: true,
-      employee_id: true,  
+      employee_id: true,
       user: {
         select: {
-          id: true,          // Get the Users.id
+          id: true,
           is_active: true,
-          role: true,        // Get role from Users table
-          id_number: true    // Get the id_number for reference
+          role: true,
+          id_number: true
         }
       }
     },
   });
   
+  // Log attempt - user not found
   if (!employee) {
+    await logLoginAttempt({
+      email: validatedData.email,
+      ip_address: clientIP,
+      user_agent: userAgent,
+      status: 'failed',
+      failure_reason: 'user_not_found',
+      login_method: 'biometric'
+    });
+    
     return NextResponse.json(
       { error: "User not found" },
       { status: 401 }
     );
   }
   
-  // Verify that the userId from biometric auth matches the employee's user ID
+  // Verify that the userId matches
   if (employee.user?.id !== validatedData.userId) {
+    await logLoginAttempt({
+      user_id: employee.user?.id,
+      employee_id: employee.id,
+      email: validatedData.email,
+      ip_address: clientIP,
+      user_agent: userAgent,
+      status: 'failed',
+      failure_reason: 'biometric_mismatch',
+      login_method: 'biometric'
+    });
+    
     return NextResponse.json(
       { error: "Authentication mismatch" },
       { status: 401 }
@@ -135,11 +217,33 @@ async function handleBiometricLogin(body: any) {
   
   // Check if user is active
   if (!employee.user?.is_active) {
+    await logLoginAttempt({
+      user_id: employee.user?.id,
+      employee_id: employee.id,
+      email: validatedData.email,
+      ip_address: clientIP,
+      user_agent: userAgent,
+      status: 'blocked',
+      failure_reason: 'account_inactive',
+      login_method: 'biometric'
+    });
+    
     return NextResponse.json(
       { error: "Your account has been deactivated. Please contact administrator." },
       { status: 403 }
     );
   }
+  
+  // Log successful biometric login
+  await logLoginAttempt({
+    user_id: employee.user?.id,
+    employee_id: employee.id,
+    email: validatedData.email,
+    ip_address: clientIP,
+    user_agent: userAgent,
+    status: 'success',
+    login_method: 'biometric'
+  });
   
   return createAuthResponse(employee);
 }
@@ -156,12 +260,12 @@ async function createAuthResponse(employee: any) {
   
   // Create JWT token with BOTH Employee ID and User ID
   const token = await new SignJWT({
-    id: employee.id,                      // Employees.id for attendance records
+    id: employee.id,
     email: employee.email,
-    role: employee.user.role,             // Role from Users table
+    role: employee.user.role,
     name: employee.name,
-    userId: employee.user.id,             // User ID from Users table for WebAuthn
-    id_number: employee.user.id_number    // ID number for reference
+    userId: employee.user.id,
+    id_number: employee.user.id_number
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('24h')
@@ -170,11 +274,11 @@ async function createAuthResponse(employee: any) {
   // Set HTTP-only cookie
   const response = NextResponse.json({
     user: {
-      id: employee.id,               // Employees.id for attendance records
+      id: employee.id,
       email: employee.email,
       name: employee.name,
-      role: employee.user.role,      // Role from Users table
-      userId: employee.user.id       // Include userId in response too
+      role: employee.user.role,
+      userId: employee.user.id
     },
     message: "Logged in successfully",
   }, {
@@ -186,8 +290,67 @@ async function createAuthResponse(employee: any) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     maxAge: 60 * 60 * 24, // 24 hours
-    path: '/', // Ensure cookie is set for entire site
+    path: '/',
   });
   
   return response;
+}
+
+// Helper function to log login attempts
+async function logLoginAttempt({
+  user_id = null,
+  employee_id = null,
+  email,
+  ip_address,
+  user_agent,
+  status,
+  failure_reason = null,
+  login_method
+}: {
+  user_id?: number | null;
+  employee_id?: number | null;
+  email: string;
+  ip_address: string;
+  user_agent: string;
+  status: 'success' | 'failed' | 'blocked';
+  failure_reason?: string | null;
+  login_method: 'password' | 'biometric';
+}) {
+  try {
+    await db.loginLogs.create({
+      data: {
+        user_id,
+        employee_id,
+        email,
+        ip_address,
+        user_agent,
+        status,
+        failure_reason,
+        login_method
+      }
+    });
+  } catch (error) {
+    console.error('Failed to log login attempt:', error);
+    // Don't throw error - logging failure shouldn't break login flow
+  }
+}
+
+// Helper function to get client IP
+function getClientIP(request: Request): string {
+  // Check various headers for IP address
+  const forwarded = request.headers.get('x-forwarded-for');
+  const real = request.headers.get('x-real-ip');
+  const clientIP = request.headers.get('x-client-ip');
+  
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  if (real) {
+    return real;
+  }
+  if (clientIP) {
+    return clientIP;
+  }
+  
+  return 'unknown';
 }

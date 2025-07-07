@@ -6,7 +6,7 @@ import {
   SidebarGroup,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon, Shield } from "lucide-react";
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -137,6 +137,12 @@ const navItems = currentUser?.role == 'admin'
         href: '/users',
         type: 'link' as const
         },
+        {
+        label: 'Login Logs',
+        icon: <Shield size={20} />,
+        href: '/login-logs',
+        type: 'link' as const
+      },
       ...baseNavItems.slice(4) // Rest of the items (Profile, Logout)
     ]
   : baseNavItems

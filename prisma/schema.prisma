@@ -18,9 +18,10 @@ model Users {
   is_active     Boolean     @default(true)
   created_at    DateTime    @default(now())
   updated_at    DateTime    @updatedAt
-  created_by    String      @db.VarChar(100)
+  created_by    String      @db.VarChar(100) 
   Employee      Employees?  // One-to-one relation with Employees
-  webAuthnCredentials WebAuthnCredentials[] 
+  webAuthnCredentials WebAuthnCredentials[]
+  LoginLogs     LoginLogs[] 
   webAuthnCredentialChallenge WebAuthnCredentialChallenge?
 
   @@map("Users")
@@ -41,6 +42,7 @@ model Employees {
   created_at      DateTime     @default(now())
   user            Users        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   Attendance      Attendance[]
+  LoginLogs       LoginLogs[]
   PasswordReset   PasswordReset[] 
 
   @@index([id_number, role]) // Index for faster verification lookups
@@ -105,4 +107,32 @@ model WebAuthnCredentialChallenge {
   updatedAt DateTime  @updatedAt
 
   @@map("WebAuthnCredentialChallenge")
+}
+
+// Add this model to your existing schema.prisma file
+
+model LoginLogs {
+  id               Int       @id @default(autoincrement())
+  user_id          Int?      // Links to Users.id - nullable for failed attempts
+  employee_id      Int?      // Links to Employees.id - nullable for failed attempts  
+  email            String    @db.VarChar(100) // Always store email attempted
+  ip_address       String    @db.VarChar(45)  // IPv4/IPv6 support
+  user_agent       String    @db.Text         // Browser/device info
+  status           String    @db.VarChar(20)  // 'success', 'failed', 'blocked'
+  failure_reason   String?   @db.VarChar(100) // Detailed failure reason
+  login_method     String    @db.VarChar(20)  // 'password', 'biometric'
+  session_duration Int?      // In minutes - for successful logins
+  attempted_at     DateTime  @default(now())
+  
+  // Relations
+  user             Users?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  employee         Employees? @relation(fields: [employee_id], references: [id], onDelete: SetNull)
+  
+  @@map("LoginLogs")
+  @@index([user_id])
+  @@index([employee_id])
+  @@index([email])
+  @@index([attempted_at])
+  @@index([status])
+  @@index([ip_address])
 }
