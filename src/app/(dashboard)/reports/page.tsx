@@ -135,11 +135,44 @@ export default function ReportsPage() {
     setCurrentPage(1);
   };
 
+// Helper function to calculate hours for export
+  const calculateHoursForExport = (checkInTime: string | Date | null | undefined, checkOutTime: string | Date | null | undefined, date: string) => {
+    if (!checkInTime) return '-';
+    
+    const recordDate = new Date(date).toDateString();
+    const today = new Date().toDateString();
+    const isToday = recordDate === today;
+    
+    // Convert to Date objects safely
+    const checkIn = checkInTime instanceof Date ? checkInTime : new Date(checkInTime);
+    const checkOut = checkOutTime 
+      ? (checkOutTime instanceof Date ? checkOutTime : new Date(checkOutTime))
+      : (isToday ? new Date() : null);
+    
+    if (!checkOut || isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) return '-';
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    return `${hours}h ${minutes}m`;
+  };
+
   const exportToCSV = () => {
-    const headers = ['Employee ID', 'Employee Name', 'Date', 'Time In', 'Time Out', 'Status'];
-    const csvData = filteredData.map(record => 
-      [record.employee_id, record.Employees?.name, record.date, record.check_in_time, record.check_out_time, record.status]
-    );
+    const headers = ['Employee ID', 'Employee Name', 'Date', 'Time In', 'Time Out', 'Status', 'Hours Worked'];
+    const csvData = filteredData.map(record => [
+      record.employee_id, 
+      record.Employees?.name || '-', 
+      record.date, 
+      record.check_in_time || '-', 
+      record.check_out_time || '-', 
+      record.status,
+      calculateHoursForExport(record.check_in_time, record.check_out_time, record.date instanceof Date ? record.date.toISOString() : record.date)
+    ]);
     
     const csvContent = [
       headers.join(','),
@@ -152,7 +185,6 @@ export default function ReportsPage() {
     link.download = `attendance_report_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
-
   // Render the component
   return (
     <div className="p-6 space-y-6">

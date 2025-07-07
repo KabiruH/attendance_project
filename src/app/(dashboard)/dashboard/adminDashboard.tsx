@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { Clock, UserCheck, AlertTriangle, UserPlus } from 'lucide-react';
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 interface AttendanceRecord {
   id: number;
   employee_id: number;
@@ -187,6 +188,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     return new Date(dateString).toLocaleTimeString();
   };
 
+  // Function to calculate hours worked
+  const calculateHoursWorked = (checkInTime: string | null, checkOutTime: string | null) => {
+    if (!checkInTime) return '-';
+    
+    // If not checked out yet, calculate from check-in to current time
+    const checkIn = new Date(checkInTime);
+    const checkOut = checkOutTime ? new Date(checkOutTime) : new Date();
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    if (!checkOutTime) {
+      // Still working - show ongoing time with indicator
+      return `${hours}h ${minutes}m *`;
+    }
+    
+    return `${hours}h ${minutes}m`;
+  };
+
   const getTodayAttendance = () => {
     const today = new Date().toDateString();
     // Filter for only today's records and sort them
@@ -198,214 +223,225 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   };
 
   const todayAttendance = getTodayAttendance();
-const totalEmployees = new Set(attendanceData.map(a => a.employee_id)).size;
-const presentToday = todayAttendance.filter(a => 
-  a.status.toLowerCase() === 'present' || a.status.toLowerCase() === 'late'
-).length;
-const lateToday = todayAttendance.filter(a => 
-  a.status.toLowerCase() === 'late'
-).length;
+  const totalEmployees = new Set(attendanceData.map(a => a.employee_id)).size;
+  const presentToday = todayAttendance.filter(a => 
+    a.status.toLowerCase() === 'present' || a.status.toLowerCase() === 'late'
+  ).length;
+  const lateToday = todayAttendance.filter(a => 
+    a.status.toLowerCase() === 'late'
+  ).length;
 
-return (
-  <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-6 space-y-6">
-    {/* Header with Welcome and Clock */}
-    <div className="flex justify-between items-center bg-white rounded-lg p-4 shadow-lg">
-      <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-        Welcome, {employeeName || 'Admin'}
-      </h1>
-      <div className="flex items-center space-x-2 text-lg font-semibold text-gray-700">
-        <Clock className="w-6 h-6 text-blue-600 animate-pulse" />
-        <span>{currentTime}</span>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-6 space-y-6">
+      {/* Header with Welcome and Clock */}
+      <div className="flex justify-between items-center bg-white rounded-lg p-4 shadow-lg">
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          Welcome, {employeeName || 'Admin'}
+        </h1>
+        <div className="flex items-center space-x-2 text-lg font-semibold text-gray-700">
+          <Clock className="w-6 h-6 text-blue-600 animate-pulse" />
+          <span>{currentTime}</span>
+        </div>
       </div>
-    </div>
 
-    {/* Personal Check In/Out Card */}
-    <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600">
-        <CardTitle className="text-white">Your Attendance</CardTitle>
-      </CardHeader>
-      <CardContent className="flex justify-center space-x-4 p-6">
-        <Button
-          size="lg"
-          onClick={() => handleAttendance('check-in')}
-          disabled={isCheckedIn || isLoading}
-          className={`w-32 transform hover:scale-105 transition-transform duration-200 ${
-            isCheckedIn ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'
-          }`}
-        >
-          {isLoading ? 'Processing...' : 'Check In'}
-        </Button>
-        <Button
-          size="lg"
-          onClick={() => handleAttendance('check-out')}
-          disabled={!isCheckedIn || isLoading}
-          className={`w-32 transform hover:scale-105 transition-transform duration-200 ${
-            !isCheckedIn ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'
-          }`}
-        >
-          {isLoading ? 'Processing...' : 'Check Out'}
-        </Button>
-      </CardContent>
-    </Card>
-
-    {/* Summary Cards */}
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <Card className="transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white">
-            <div>
-              <p className="text-sm font-medium opacity-90">Total Employees</p>
-              <p className="text-3xl font-bold">{totalEmployees}</p>
-            </div>
-            <UserPlus className="w-12 h-12 opacity-80" />
-          </div>
+      {/* Personal Check In/Out Card */}
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600">
+          <CardTitle className="text-white">Your Attendance</CardTitle>
+        </CardHeader>
+        <CardContent className="flex justify-center space-x-4 p-6">
+          <Button
+            size="lg"
+            onClick={() => handleAttendance('check-in')}
+            disabled={isCheckedIn || isLoading}
+            className={`w-32 transform hover:scale-105 transition-transform duration-200 ${
+              isCheckedIn ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'
+            }`}
+          >
+            {isLoading ? 'Processing...' : 'Check In'}
+          </Button>
+          <Button
+            size="lg"
+            onClick={() => handleAttendance('check-out')}
+            disabled={!isCheckedIn || isLoading}
+            className={`w-32 transform hover:scale-105 transition-transform duration-200 ${
+              !isCheckedIn ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {isLoading ? 'Processing...' : 'Check Out'}
+          </Button>
         </CardContent>
       </Card>
-      
-      <Card className="transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white">
-            <div>
-              <p className="text-sm font-medium opacity-90">Present Today</p>
-              <p className="text-3xl font-bold">{presentToday}</p>
-            </div>
-            <UserCheck className="w-12 h-12 opacity-80" />
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Card className="transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-lg text-white">
-            <div>
-              <p className="text-sm font-medium opacity-90">Late Today</p>
-              <p className="text-3xl font-bold">{lateToday}</p>
-            </div>
-            <AlertTriangle className="w-12 h-12 opacity-80" />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
 
-    {/* Today's Attendance Table */}
-    <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600">
-        <CardTitle className="text-white">Today's Attendance</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-hidden rounded-lg border border-gray-200">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="font-semibold">Employee Name</TableHead>
-                <TableHead className="font-semibold">Check In</TableHead>
-                <TableHead className="font-semibold">Check Out</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {todayAttendance.length > 0 ? (
-                todayAttendance.map((attendance) => (
-                  <TableRow key={attendance.id} className="hover:bg-gray-50 transition-colors duration-200">
-                    <TableCell className="font-medium">{attendance.employee_name}</TableCell>
-                    <TableCell>{formatTime(attendance.check_in_time)}</TableCell>
-                    <TableCell>{formatTime(attendance.check_out_time)}</TableCell>
-                    <TableCell>
-                      <Badge className={`${
-                        attendance.status.toLowerCase() === 'present' ? 'bg-green-500 hover:bg-green-600' :
-                        attendance.status.toLowerCase() === 'late' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'
-                      } transition-colors duration-200`}>
-                        {attendance.status.toUpperCase()}
-                      </Badge>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white">
+              <div>
+                <p className="text-sm font-medium opacity-90">Total Employees</p>
+                <p className="text-3xl font-bold">{totalEmployees}</p>
+              </div>
+              <UserPlus className="w-12 h-12 opacity-80" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white">
+              <div>
+                <p className="text-sm font-medium opacity-90">Present Today</p>
+                <p className="text-3xl font-bold">{presentToday}</p>
+              </div>
+              <UserCheck className="w-12 h-12 opacity-80" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-lg text-white">
+              <div>
+                <p className="text-sm font-medium opacity-90">Late Today</p>
+                <p className="text-3xl font-bold">{lateToday}</p>
+              </div>
+              <AlertTriangle className="w-12 h-12 opacity-80" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Today's Attendance Table */}
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600">
+          <CardTitle className="text-white">Today's Attendance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-hidden rounded-lg border border-gray-200">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="font-semibold">Employee Name</TableHead>
+                  <TableHead className="font-semibold">Check In</TableHead>
+                  <TableHead className="font-semibold">Check Out</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">Hours Worked</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {todayAttendance.length > 0 ? (
+                  todayAttendance.map((attendance) => (
+                    <TableRow key={attendance.id} className="hover:bg-gray-50 transition-colors duration-200">
+                      <TableCell className="font-medium">{attendance.employee_name}</TableCell>
+                      <TableCell>{formatTime(attendance.check_in_time)}</TableCell>
+                      <TableCell>{formatTime(attendance.check_out_time)}</TableCell>
+                      <TableCell>
+                        <Badge className={`${
+                          attendance.status.toLowerCase() === 'present' ? 'bg-green-500 hover:bg-green-600' :
+                          attendance.status.toLowerCase() === 'late' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'
+                        } transition-colors duration-200`}>
+                          {attendance.status.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        <span className={`${
+                          !attendance.check_out_time && attendance.check_in_time ? 'text-blue-600 font-semibold' : 'text-gray-700'
+                        }`}>
+                          {calculateHoursWorked(attendance.check_in_time, attendance.check_out_time)}
+                        </span>
+                        {!attendance.check_out_time && attendance.check_in_time && (
+                          <span className="text-xs text-blue-500 ml-1">(ongoing)</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-gray-500">
+                      No attendance records for today
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-gray-500">
-                    No attendance records for today
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
-
-    {/* Charts */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600">
-          <CardTitle className="text-white">Monthly Attendance Overview</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[300px] pt-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={personalAttendance}>
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 12 }}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-              />
-              <YAxis />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  borderRadius: '8px',
-                  border: 'none',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Legend />
-              <Bar dataKey="present" fill="#22c55e" name="Present" />
-              <Bar dataKey="late" fill="#eab308" name="Late" />
-              <Bar dataKey="absent" fill="#ef4444" name="Absent" />
-            </BarChart>
-          </ResponsiveContainer>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600">
-          <CardTitle className="text-white">Weekly Hours</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[300px] pt-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={weeklyHours}>
-              <XAxis
-                dataKey="day"
-                tick={{ fontSize: 12 }}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-              />
-              <YAxis />
-              <Tooltip
-                contentStyle={{ 
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  borderRadius: '8px',
-                  border: 'none',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="hours"
-                stroke="#2563eb"
-                name="Hours Worked"
-                strokeWidth={2}
-                dot={{ fill: '#2563eb' }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {/* Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+          <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600">
+            <CardTitle className="text-white">Monthly Attendance Overview</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px] pt-6">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={personalAttendance}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderRadius: '8px',
+                    border: 'none',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="present" fill="#22c55e" name="Present" />
+                <Bar dataKey="late" fill="#eab308" name="Late" />
+                <Bar dataKey="absent" fill="#ef4444" name="Absent" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+          <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600">
+            <CardTitle className="text-white">Weekly Hours</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px] pt-6">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={weeklyHours}>
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                />
+                <YAxis />
+                <Tooltip
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderRadius: '8px',
+                    border: 'none',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="hours"
+                  stroke="#2563eb"
+                  name="Hours Worked"
+                  strokeWidth={2}
+                  dot={{ fill: '#2563eb' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default AdminDashboard;

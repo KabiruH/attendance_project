@@ -62,9 +62,52 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
     }
   };
 
+  // Function to calculate hours worked
+  const calculateHoursWorked = (timeIn: string | null, timeOut: string | null, date: string) => {
+    if (!timeIn) return '-';
+    
+    // Check if it's today's date
+    const recordDate = new Date(date).toDateString();
+    const today = new Date().toDateString();
+    const isToday = recordDate === today;
+    
+    // If not checked out yet and it's today, calculate from timeIn to current time
+    const checkIn = new Date(timeIn);
+    const checkOut = timeOut ? new Date(timeOut) : (isToday ? new Date() : null);
+    
+    if (!checkOut) return '-';
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    // If it's today and no timeOut, show it's ongoing
+    if (!timeOut && isToday) {
+      return `${hours}h ${minutes}m *`;
+    }
+    
+    return `${hours}h ${minutes}m`;
+  };
+
+  // Function to get hours worked styling
+  const getHoursStyle = (timeIn: string | null, timeOut: string | null, date: string) => {
+    const recordDate = new Date(date).toDateString();
+    const today = new Date().toDateString();
+    const isToday = recordDate === today;
+    
+    if (!timeOut && timeIn && isToday) {
+      return 'text-blue-600 font-semibold'; // Ongoing work
+    }
+    return 'text-gray-700'; // Completed or no work
+  };
+
   return (
     <div className="overflow-auto rounded-md border">
-      <Table className="min-w-[600px] md:w-full">
+      <Table className="min-w-[700px] md:w-full">
         <TableHeader>
           <TableRow>
             <TableHead className="w-[120px]">Employee ID</TableHead>
@@ -73,6 +116,7 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
             <TableHead className="text-center">Time In</TableHead>
             <TableHead className="text-center">Time Out</TableHead>
             <TableHead className="text-center">Status</TableHead>
+            <TableHead className="text-center">Hours Worked</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -87,6 +131,15 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
                 <Badge className={`${getStatusColor(employee.status)} px-3 py-1`}>
                   {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
                 </Badge>
+              </TableCell>
+              <TableCell className="text-center font-mono">
+                <span className={getHoursStyle(employee.timeIn, employee.timeOut, employee.date)}>
+                  {calculateHoursWorked(employee.timeIn, employee.timeOut, employee.date)}
+                </span>
+                {!employee.timeOut && employee.timeIn && 
+                 new Date(employee.date).toDateString() === new Date().toDateString() && (
+                  <span className="text-xs text-blue-500 ml-1">(ongoing)</span>
+                )}
               </TableCell>
             </TableRow>
           ))}

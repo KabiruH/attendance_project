@@ -187,7 +187,7 @@ const SignupForm = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="id_card">ID Card (Image)</Label>
+                <Label htmlFor="id_card">ID Card/Passport (Image)</Label>
                 <Input
                   id="id_card"
                   name="id_card"
@@ -219,7 +219,7 @@ const SignupForm = () => {
             {/* Right Column */}
             <div className="space-y-4">
             <div className="space-y-2">
-                <Label htmlFor="id_number">ID Number</Label>
+                <Label htmlFor="id_number">ID/Passport Number</Label>
                 <Input
                   id="id_number"
                   name="id_number"

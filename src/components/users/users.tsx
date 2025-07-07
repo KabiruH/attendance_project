@@ -25,7 +25,7 @@ export default function UsersTable({ users, onEdit }: UsersTableProps) {
         <TableRow>
           <TableHead>Profile</TableHead>
           <TableHead>Name</TableHead>
-          <TableHead>ID Number</TableHead>
+          <TableHead>ID/Passport Number</TableHead>
           <TableHead>Role</TableHead>
           <TableHead>Department</TableHead>
           <TableHead>Phone Number</TableHead>
@@ -91,7 +91,7 @@ export default function UsersTable({ users, onEdit }: UsersTableProps) {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <h3 className="font-medium">ID Card</h3>
+                      <h3 className="font-medium">ID Card/Passport</h3>
                       {user.id_card_path ? (
                         <div className="relative aspect-[3/2] w-full max-w-[300px] overflow-hidden rounded-lg border">
                           <Image
@@ -103,7 +103,7 @@ export default function UsersTable({ users, onEdit }: UsersTableProps) {
                           />
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500">No ID card available</p>
+                        <p className="text-sm text-gray-500">No ID card/Passport available</p>
                       )}
                     </div>
                   </div>

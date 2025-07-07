@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Clock, UserCheck, UserX, AlertTriangle } from 'lucide-react';
+import { Clock, UserCheck, UserX, AlertTriangle, Timer } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 
 interface AttendanceRecord {
@@ -45,15 +45,21 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   const [attendanceData, setAttendanceData] = useState<ChartDataPoint[]>([]);
   const [weeklyHours, setWeeklyHours] = useState<WeeklyHoursDataPoint[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
+  const [todayCheckIn, setTodayCheckIn] = useState<string | null>(null);
+  const [todayHours, setTodayHours] = useState<string>('-');
   const { toast } = useToast();
 
   // Update clock every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString());
+      // Update today's hours if checked in
+      if (isCheckedIn && todayCheckIn) {
+        setTodayHours(calculateTodayHours(todayCheckIn, null));
+      }
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isCheckedIn, todayCheckIn]);
 
   const fetchTokenAndUser = async () => {
     try {
@@ -81,6 +87,28 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
     }
   };
 
+  // Function to calculate today's hours worked
+  const calculateTodayHours = (checkInTime: string | null, checkOutTime: string | null) => {
+    if (!checkInTime) return '-';
+    
+    const checkIn = new Date(checkInTime);
+    const checkOut = checkOutTime ? new Date(checkOutTime) : new Date();
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    if (!checkOutTime) {
+      return `${hours}h ${minutes}m`;
+    }
+    
+    return `${hours}h ${minutes}m`;
+  };
+
   const fetchAttendanceStatus = async () => {
     try {
       const response = await fetch('/api/attendance/status', {
@@ -94,15 +122,36 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
 
       const data = await response.json();
       
-       // Check if there's a record for today with check_in but no check_out
-    const today = new Date().toISOString().split('T')[0];
-    const todayRecord = data.attendanceData.find((record: AttendanceRecord) => 
-      record.date.startsWith(today) && 
-      record.check_in_time && 
-      !record.check_out_time
-    );
+      // Check if there's a record for today with check_in but no check_out
+      const today = new Date().toISOString().split('T')[0];
+      const todayRecord = data.attendanceData.find((record: AttendanceRecord) => 
+        record.date.startsWith(today) && 
+        record.check_in_time && 
+        !record.check_out_time
+      );
 
-    setIsCheckedIn(!!todayRecord);
+      setIsCheckedIn(!!todayRecord);
+      
+      // Store today's check-in time for live hours calculation
+      if (todayRecord) {
+        setTodayCheckIn(todayRecord.check_in_time);
+        setTodayHours(calculateTodayHours(todayRecord.check_in_time, null));
+      } else {
+        // Check if there's a completed record for today
+        const completedTodayRecord = data.attendanceData.find((record: AttendanceRecord) => 
+          record.date.startsWith(today) && 
+          record.check_in_time && 
+          record.check_out_time
+        );
+        
+        if (completedTodayRecord) {
+          setTodayCheckIn(null);
+          setTodayHours(calculateTodayHours(completedTodayRecord.check_in_time, completedTodayRecord.check_out_time));
+        } else {
+          setTodayCheckIn(null);
+          setTodayHours('-');
+        }
+      }
 
       // Process attendance data for charts
       const processedData = data.attendanceData.map((record: AttendanceRecord) => ({
@@ -196,15 +245,22 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   }, [employee_id]); // Re-run when employee_id changes
 
   // Calculate statistics
-  const { presentDays, lateDays, absentDays } = React.useMemo(() => ({
-    presentDays: attendanceData.reduce((sum, day) => sum + day.present, 0),
-    lateDays: attendanceData.reduce((sum, day) => sum + day.late, 0),
-    absentDays: attendanceData.reduce((sum, day) => sum + day.absent, 0)
-  }), [attendanceData]);
+  const { presentDays, lateDays, absentDays, totalHoursThisWeek } = React.useMemo(() => {
+    const totalWeeklyHours = weeklyHours
+      .slice(-7) // Last 7 days
+      .reduce((sum, day) => sum + day.hours, 0);
+    
+    return {
+      presentDays: attendanceData.reduce((sum, day) => sum + day.present, 0),
+      lateDays: attendanceData.reduce((sum, day) => sum + day.late, 0),
+      absentDays: attendanceData.reduce((sum, day) => sum + day.absent, 0),
+      totalHoursThisWeek: totalWeeklyHours.toFixed(1)
+    };
+  }, [attendanceData, weeklyHours]);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 space-y-6">
-      {/* Welcome Section remains the same */}
+      {/* Welcome Section */}
       <div className="flex justify-between items-center bg-white rounded-lg p-4 shadow-md">
         <h1 className="text-3xl font-bold text-slate-900">
           Welcome, <span className="text-blue-600">{employeeName || 'Loading...'}</span>
@@ -215,37 +271,55 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
         </div>
       </div>
 
-      {/* Check In/Out Card remains the same */}
+      {/* Check In/Out Card */}
       <Card className="shadow-md">
         <CardHeader className="bg-gradient-to-r from-white via-gray-200 to-gray-300">
           <CardTitle className="font-bold text-slate-900">Attendance</CardTitle>
         </CardHeader>
-        <CardContent className="flex justify-center space-x-4 p-6 bg-white">
-          <Button
-            size="lg"
-            onClick={() => handleAttendance('check-in')}
-            disabled={isCheckedIn || isLoading}
-            className={`w-32 font-bold ${
-              isCheckedIn ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {isLoading ? 'Processing...' : 'Check In'}
-          </Button>
-          <Button
-            size="lg"
-            onClick={() => handleAttendance('check-out')}
-            disabled={!isCheckedIn || isLoading}
-            className={`w-32 font-bold ${
-              !isCheckedIn ? 'bg-gray-400' : 'bg-red-600 hover:bg-slate-900'
-            }`}
-          >
-            {isLoading ? 'Processing...' : 'Check Out'}
-          </Button>
+        <CardContent className="p-6 bg-white">
+          <div className="flex justify-center space-x-4 mb-4">
+            <Button
+              size="lg"
+              onClick={() => handleAttendance('check-in')}
+              disabled={isCheckedIn || isLoading}
+              className={`w-32 font-bold ${
+                isCheckedIn ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {isLoading ? 'Processing...' : 'Check In'}
+            </Button>
+            <Button
+              size="lg"
+              onClick={() => handleAttendance('check-out')}
+              disabled={!isCheckedIn || isLoading}
+              className={`w-32 font-bold ${
+                !isCheckedIn ? 'bg-gray-400' : 'bg-red-600 hover:bg-slate-900'
+              }`}
+            >
+              {isLoading ? 'Processing...' : 'Check Out'}
+            </Button>
+          </div>
+          
+          {/* Today's Hours Display */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600 mb-1">Today's Hours</p>
+            <div className="flex items-center justify-center space-x-2">
+              <Timer className="w-5 h-5 text-blue-600" />
+              <span className={`text-2xl font-bold ${
+                isCheckedIn ? 'text-blue-600' : 'text-gray-700'
+              }`}>
+                {todayHours}
+              </span>
+              {isCheckedIn && (
+                <span className="text-sm text-blue-500">(ongoing)</span>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Updated Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Updated Statistics Cards - Now 4 cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Present Days Card - Blue theme */}
         <Card className="shadow-md">
           <CardContent className="pt-6">
@@ -262,7 +336,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
         {/* Late Days Card - Yellow theme */}
         <Card className="shadow-md">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between p-4  bg-yellow-500 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-yellow-500 rounded-lg">
               <div>
                 <p className="text-sm font-bold text-slate-900">Late Days</p>
                 <p className="text-3xl font-bold text-slate-900">{lateDays}</p>
@@ -275,7 +349,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
         {/* Absent Days Card - Red theme */}
         <Card className="shadow-md">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between p-4  bg-red-400 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-red-400 rounded-lg">
               <div>
                 <p className="text-sm font-bold text-slate-900">Absent Days</p>
                 <p className="text-3xl font-bold text-slate-900">{absentDays}</p>
@@ -284,9 +358,22 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Weekly Hours Card - Green theme */}
+        <Card className="shadow-md">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between p-4 bg-green-400 rounded-lg">
+              <div>
+                <p className="text-sm font-bold text-slate-900">This Week</p>
+                <p className="text-2xl font-bold text-slate-900">{totalHoursThisWeek}h</p>
+              </div>
+              <Timer className="w-12 h-12 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts section remains the same */}
+      {/* Charts section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="shadow-md">
           <CardHeader className="bg-gradient-to-r from-white via-gray-200 to-gray-200">
@@ -322,7 +409,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
 
         <Card className="shadow-md">
           <CardHeader className="bg-gradient-to-r from-white via-gray-200 to-gray-300">
-            <CardTitle className="font-bold text-slate-900">Weekly Hours</CardTitle>
+            <CardTitle className="font-bold text-slate-900">Daily Hours Worked</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px] pt-6 bg-white">
             <ResponsiveContainer width="100%" height="100%">

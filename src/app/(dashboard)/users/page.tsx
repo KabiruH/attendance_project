@@ -211,7 +211,7 @@ export default function UsersPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="id_number">ID Number</Label>
+                <Label htmlFor="id_number">ID/Passport Number</Label>
                 <Input
                   id="id_number"
                   value={formData.id_number}

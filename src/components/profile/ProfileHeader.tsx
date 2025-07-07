@@ -91,7 +91,7 @@ export function ProfileHeader({
             </div>
             <div className="flex items-center text-gray-600">
               <FileText className="w-4 h-4 mr-2" />
-              ID Number: {id_number}
+              ID/Passport Number: {id_number}
             </div>
             <div className="flex items-center text-gray-600">
               <Calendar className="w-4 h-4 mr-2" />
@@ -104,7 +104,7 @@ export function ProfileHeader({
                 target="_blank"
               >
                 <FileText className="w-4 h-4 mr-2" />
-                View ID Card
+                View ID Card/Passport
               </Link>
             )}
           </div>
