@@ -43,6 +43,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [employee_id, setEmployeeId] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<ChartDataPoint[]>([]);
+  const [rawAttendanceData, setRawAttendanceData] = useState<AttendanceRecord[]>([]);
   const [weeklyHours, setWeeklyHours] = useState<WeeklyHoursDataPoint[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
   const [todayCheckIn, setTodayCheckIn] = useState<string | null>(null);
@@ -121,6 +122,9 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
       }
 
       const data = await response.json();
+      
+      // Store raw attendance data
+      setRawAttendanceData(data.attendanceData || []);
       
       // Check if there's a record for today with check_in but no check_out
       const today = new Date().toISOString().split('T')[0];
@@ -245,18 +249,55 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   }, [employee_id]); // Re-run when employee_id changes
 
   // Calculate statistics
-  const { presentDays, lateDays, absentDays, totalHoursThisWeek } = React.useMemo(() => {
-    const totalWeeklyHours = weeklyHours
-      .slice(-7) // Last 7 days
-      .reduce((sum, day) => sum + day.hours, 0);
+  const { presentDays, lateDays, absentDays, totalHoursThisMonth } = React.useMemo(() => {
+    // Get current month and year
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    // Calculate total hours for current month from raw attendance data
+    let totalMonthlyHours = 0;
+    
+    rawAttendanceData.forEach((record: AttendanceRecord) => {
+      const recordDate = new Date(record.date);
+      
+      // Check if record is from current month and year
+      if (recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear) {
+        if (record.check_in_time) {
+          const checkIn = new Date(record.check_in_time);
+          let checkOut: Date;
+          
+          // If no check_out_time and it's today, use current time
+          if (!record.check_out_time) {
+            const today = new Date().toISOString().split('T')[0];
+            const recordDay = record.date.split('T')[0];
+            
+            if (recordDay === today) {
+              checkOut = new Date(); // Current time for ongoing session
+            } else {
+              return; // Skip incomplete past records
+            }
+          } else {
+            checkOut = new Date(record.check_out_time);
+          }
+          
+          const diffInMs = checkOut.getTime() - checkIn.getTime();
+          const hours = diffInMs / (1000 * 60 * 60);
+          
+          if (hours > 0) {
+            totalMonthlyHours += hours;
+          }
+        }
+      }
+    });
     
     return {
       presentDays: attendanceData.reduce((sum, day) => sum + day.present, 0),
       lateDays: attendanceData.reduce((sum, day) => sum + day.late, 0),
       absentDays: attendanceData.reduce((sum, day) => sum + day.absent, 0),
-      totalHoursThisWeek: totalWeeklyHours.toFixed(1)
+      totalHoursThisMonth: totalMonthlyHours.toFixed(1)
     };
-  }, [attendanceData, weeklyHours]);
+  }, [attendanceData, weeklyHours, rawAttendanceData]);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 space-y-6">
@@ -359,13 +400,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
           </CardContent>
         </Card>
 
-        {/* Weekly Hours Card - Green theme */}
+        {/* Monthly Hours Card - Green theme */}
         <Card className="shadow-md">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between p-4 bg-green-400 rounded-lg">
               <div>
-                <p className="text-sm font-bold text-slate-900">This Week</p>
-                <p className="text-2xl font-bold text-slate-900">{totalHoursThisWeek}h</p>
+                <p className="text-sm font-bold text-slate-900">This Month</p>
+                <p className="text-2xl font-bold text-slate-900">{totalHoursThisMonth}h</p>
               </div>
               <Timer className="w-12 h-12 text-green-600" />
             </div>

@@ -1,4 +1,4 @@
-// app/login-logs/page.tsx
+// app/admin/login-logs/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, Search, RefreshCw, Download } from "lucide-react";
+import { Search, RefreshCw, Download } from "lucide-react";
 import LoginLogsTable from '@/components/login-logs/login-logs-table';
 
 interface LoginLog {
@@ -56,13 +55,23 @@ export default function AdminLoginLogsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Filter states
+  // Filter states - Default to last 7 days
+  const getDefaultDateFrom = () => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7); // 7 days ago
+    return date.toISOString().split('T')[0];
+  };
+
+  const getDefaultDateTo = () => {
+    return new Date().toISOString().split('T')[0]; // Today
+  };
+
   const [filters, setFilters] = useState({
     status: 'all',
     email: '',
     loginMethod: 'all',
-    dateFrom: '',
-    dateTo: '',
+    dateFrom: getDefaultDateFrom(),
+    dateTo: getDefaultDateTo(),
     ipAddress: '',
     page: 1,
     limit: 50
@@ -80,7 +89,7 @@ export default function AdminLoginLogsPage() {
         }
       });
 
-      const response = await fetch(`/api/login-logs?${params.toString()}`);
+      const response = await fetch(`/api/admin/login-logs?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch login logs');
@@ -110,6 +119,24 @@ export default function AdminLoginLogsPage() {
 
   const handlePageChange = (newPage: number) => {
     const newFilters = { ...filters, page: newPage };
+    setFilters(newFilters);
+    fetchLogs(newFilters);
+  };
+
+  const handleQuickFilter = (days: number | 'all') => {
+    let newFilters;
+    
+    if (days === 'all') {
+      newFilters = { ...filters, dateFrom: '', dateTo: '', page: 1 };
+    } else {
+      const dateTo = new Date().toISOString().split('T')[0];
+      const dateFrom = new Date();
+      dateFrom.setDate(dateFrom.getDate() - days);
+      const dateFromStr = dateFrom.toISOString().split('T')[0];
+      
+      newFilters = { ...filters, dateFrom: dateFromStr, dateTo: dateTo, page: 1 };
+    }
+    
     setFilters(newFilters);
     fetchLogs(newFilters);
   };
@@ -252,6 +279,41 @@ export default function AdminLoginLogsPage() {
           <CardDescription>Filter login logs by various criteria</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Quick Date Filters */}
+          <div className="mb-4">
+            <label className="text-sm font-medium mb-2 block">Quick Date Filters</label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={filters.dateFrom === getDefaultDateFrom() && filters.dateTo === getDefaultDateTo() ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleQuickFilter(7)}
+              >
+                Last 7 Days
+              </Button>
+              <Button
+                variant={filters.dateFrom === new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] && filters.dateTo === getDefaultDateTo() ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleQuickFilter(30)}
+              >
+                Last 30 Days
+              </Button>
+              <Button
+                variant={filters.dateFrom === new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] && filters.dateTo === getDefaultDateTo() ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleQuickFilter(90)}
+              >
+                Last 3 Months
+              </Button>
+              <Button
+                variant={!filters.dateFrom && !filters.dateTo ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleQuickFilter('all')}
+              >
+                All Time
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>

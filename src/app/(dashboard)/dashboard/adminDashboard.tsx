@@ -214,12 +214,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
 
   const getTodayAttendance = () => {
     const today = new Date().toDateString();
-    // Filter for only today's records and sort them
+    // Filter for only today's records and sort by check-in time (most recent first)
     return attendanceData.filter(record => 
       new Date(record.date).toDateString() === today
-    ).sort((a, b) => 
-      a.employee_name.localeCompare(b.employee_name)
-    );
+    ).sort((a, b) => {
+      // Handle null check_in_time - put them at the bottom
+      if (!a.check_in_time && !b.check_in_time) return 0;
+      if (!a.check_in_time) return 1;
+      if (!b.check_in_time) return -1;
+      
+      // Sort by check_in_time in descending order (most recent first)
+      const timeA = new Date(a.check_in_time).getTime();
+      const timeB = new Date(b.check_in_time).getTime();
+      return timeB - timeA;
+    });
   };
 
   const todayAttendance = getTodayAttendance();
