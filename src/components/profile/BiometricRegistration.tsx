@@ -65,8 +65,6 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
 
       const id_number = data.user?.id_number;
       
-      // Extract the User ID from the JWT payload
-      // Assuming the JWT payload contains a field like 'userId' that 
       // corresponds to the ID in the Users table
       const jwtUserId = data.user?.userId || data.user?.id;
       
