@@ -1,5 +1,6 @@
 // reportType.ts
 export interface AttendanceRecord {
+  sessions: boolean;
   id: number;
   employee_id: number;
   date: string | Date;

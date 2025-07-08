@@ -10,6 +10,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+// Add sessions support interface
+interface AttendanceSession {
+  check_in: string;
+  check_out?: string | null;
+}
+
 interface Employee {
   id: string;
   name: string;
@@ -17,6 +23,7 @@ interface Employee {
   timeIn: string | null;
   timeOut: string | null;
   status: 'present' | 'absent' | 'late';
+  sessions?: AttendanceSession[]; // Add sessions support
 }
 
 interface EmployeeTableProps {
@@ -27,6 +34,113 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
   if (!employees || employees.length === 0) {
     return <div>No records to display</div>;
   }
+
+  // Helper function to safely parse sessions from data
+  const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
+    // If sessions data exists, use it
+    if (employee.sessions && Array.isArray(employee.sessions)) {
+      return employee.sessions;
+    }
+    
+    // Fallback: Convert old format to sessions format
+    if (employee.timeIn) {
+      return [{
+        check_in: employee.timeIn,
+        check_out: employee.timeOut
+      }];
+    }
+    
+    return [];
+  };
+
+  // Helper function to check if employee has active session
+  const hasActiveSession = (employee: Employee): boolean => {
+    const sessions = parseSessionsFromData(employee);
+    
+    // Check for active session in sessions data
+    if (sessions.length > 0) {
+      return sessions.some((session: AttendanceSession) => 
+        session.check_in && !session.check_out
+      );
+    }
+    
+    // Fallback to old format
+    const recordDate = new Date(employee.date).toDateString();
+    const today = new Date().toDateString();
+    const isToday = recordDate === today;
+    
+    return !!(employee.timeIn && !employee.timeOut && isToday);
+  };
+
+  // UPDATED: Function to calculate hours worked using sessions (same as AdminDashboard)
+  const calculateHoursWorked = (employee: Employee): string => {
+    const sessions = parseSessionsFromData(employee);
+    
+    // If sessions data exists, use that (new format)
+    if (sessions.length > 0) {
+      let totalMinutes = 0;
+      let hasActiveSession = false;
+      
+      sessions.forEach((session: AttendanceSession) => {
+        if (session.check_in) {
+          const checkIn = new Date(session.check_in);
+          const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+          
+          if (!session.check_out) hasActiveSession = true;
+          
+          const diffInMs = checkOut.getTime() - checkIn.getTime();
+          const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+          totalMinutes += diffInMinutes;
+        }
+      });
+      
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      if (hasActiveSession) {
+        return `${hours}h ${minutes}m *`; // Show ongoing for active sessions
+      }
+      return `${hours}h ${minutes}m`;
+    }
+    
+    // Fallback to old format for backward compatibility
+    if (!employee.timeIn) return '-';
+    
+    // Check if it's today's date
+    const recordDate = new Date(employee.date).toDateString();
+    const today = new Date().toDateString();
+    const isToday = recordDate === today;
+    
+    // If not checked out yet and it's today, calculate from timeIn to current time
+    const checkIn = new Date(employee.timeIn);
+    const checkOut = employee.timeOut ? new Date(employee.timeOut) : (isToday ? new Date() : null);
+    
+    if (!checkOut) return '-';
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    // If it's today and no timeOut, show it's ongoing
+    if (!employee.timeOut && isToday) {
+      return `${hours}h ${minutes}m *`;
+    }
+    
+    return `${hours}h ${minutes}m`;
+  };
+
+  // UPDATED: Function to get hours worked styling using sessions
+  const getHoursStyle = (employee: Employee): string => {
+    // Check if has active session using sessions-aware logic
+    if (hasActiveSession(employee)) {
+      return 'text-blue-600 font-semibold'; // Ongoing work
+    }
+    return 'text-gray-700'; // Completed or no work
+  };
 
   const getStatusColor = (status: Employee['status']) => {
     switch (status) {
@@ -62,49 +176,6 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
     }
   };
 
-  // Function to calculate hours worked
-  const calculateHoursWorked = (timeIn: string | null, timeOut: string | null, date: string) => {
-    if (!timeIn) return '-';
-    
-    // Check if it's today's date
-    const recordDate = new Date(date).toDateString();
-    const today = new Date().toDateString();
-    const isToday = recordDate === today;
-    
-    // If not checked out yet and it's today, calculate from timeIn to current time
-    const checkIn = new Date(timeIn);
-    const checkOut = timeOut ? new Date(timeOut) : (isToday ? new Date() : null);
-    
-    if (!checkOut) return '-';
-    
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMinutes < 0) return '-';
-    
-    const hours = Math.floor(diffInMinutes / 60);
-    const minutes = diffInMinutes % 60;
-    
-    // If it's today and no timeOut, show it's ongoing
-    if (!timeOut && isToday) {
-      return `${hours}h ${minutes}m *`;
-    }
-    
-    return `${hours}h ${minutes}m`;
-  };
-
-  // Function to get hours worked styling
-  const getHoursStyle = (timeIn: string | null, timeOut: string | null, date: string) => {
-    const recordDate = new Date(date).toDateString();
-    const today = new Date().toDateString();
-    const isToday = recordDate === today;
-    
-    if (!timeOut && timeIn && isToday) {
-      return 'text-blue-600 font-semibold'; // Ongoing work
-    }
-    return 'text-gray-700'; // Completed or no work
-  };
-
   return (
     <div className="overflow-auto rounded-md border">
       <Table className="min-w-[700px] md:w-full">
@@ -133,11 +204,10 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
                 </Badge>
               </TableCell>
               <TableCell className="text-center font-mono">
-                <span className={getHoursStyle(employee.timeIn, employee.timeOut, employee.date)}>
-                  {calculateHoursWorked(employee.timeIn, employee.timeOut, employee.date)}
+                <span className={getHoursStyle(employee)}>
+                  {calculateHoursWorked(employee)}
                 </span>
-                {!employee.timeOut && employee.timeIn && 
-                 new Date(employee.date).toDateString() === new Date().toDateString() && (
+                {hasActiveSession(employee) && (
                   <span className="text-xs text-blue-500 ml-1">(ongoing)</span>
                 )}
               </TableCell>

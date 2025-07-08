@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 import EmployeeTable from "@/components/employees/EmployeeTable";
 import { Toast } from "@/components/ui/toast";
 
+// UPDATED: Add sessions support to Employee interface
+interface AttendanceSession {
+  check_in: string;
+  check_out?: string | null;
+}
+
 interface Employee {
   id: string;
   name: string;
@@ -10,6 +16,7 @@ interface Employee {
   timeIn: string | null;
   timeOut: string | null;
   status: "present" | "late" | "absent";
+  sessions?: AttendanceSession[]; // ADD THIS LINE
 }
 
 interface AttendanceResponse {
@@ -72,6 +79,7 @@ function Attendance() {
       const response: AttendanceResponse = await attendanceResponse.json();
 
       if (user.role === "admin") {
+        // FIXED: Include sessions data in admin mapping
         const adminEmployees = response.attendanceData.map((record: any) => ({
           id: record.Employees?.id.toString() || record.employee_id.toString(),
           name: record.Employees?.name || "Unknown",
@@ -79,6 +87,7 @@ function Attendance() {
           timeIn: record.check_in_time,
           timeOut: record.check_out_time,
           status: record.status.toLowerCase() as 'present' | 'absent' | 'late',
+          sessions: record.sessions || [] // ADD THIS LINE - Include sessions data
         }));
         setEmployees(adminEmployees);
 
@@ -89,6 +98,7 @@ function Attendance() {
           });
         }
       } else if (user.role === "employee") {
+        // FIXED: Include sessions data in employee mapping
         const employeeRecords = response.attendanceData.map((record: any) => ({
           id: record.employee_id.toString(),
           name: user.name,
@@ -96,6 +106,7 @@ function Attendance() {
           timeIn: record.check_in_time,
           timeOut: record.check_out_time,
           status: record.status.toLowerCase() as 'present' | 'absent' | 'late',
+          sessions: record.sessions || [] // ADD THIS LINE - Include sessions data
         }));
         setEmployees(employeeRecords);
         setIsCheckedIn(response.isCheckedIn || false);
