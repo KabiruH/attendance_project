@@ -132,7 +132,7 @@ const navItems = currentUser?.role == 'admin'
   ? [
       ...baseNavItems.slice(0, 4), // Items before Users
       {
-        label: 'Users',
+        label: 'Employees',
         icon: <Users size={20} />,
         href: '/users',
         type: 'link' as const

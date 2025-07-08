@@ -7,6 +7,12 @@ import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, Responsi
 import { Clock, UserCheck, UserX, AlertTriangle, Timer } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 
+// Add sessions support interface
+interface AttendanceSession {
+  check_in: string;
+  check_out?: string | null;
+}
+
 interface AttendanceRecord {
   id: number;
   employee_id: number;
@@ -14,6 +20,7 @@ interface AttendanceRecord {
   check_in_time: string | null;
   check_out_time: string | null;
   status: string;
+  sessions?: AttendanceSession[]; // Add sessions support
 }
 
 interface ChartDataPoint {
@@ -46,21 +53,98 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
   const [rawAttendanceData, setRawAttendanceData] = useState<AttendanceRecord[]>([]);
   const [weeklyHours, setWeeklyHours] = useState<WeeklyHoursDataPoint[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
-  const [todayCheckIn, setTodayCheckIn] = useState<string | null>(null);
+  const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
   const [todayHours, setTodayHours] = useState<string>('-');
   const { toast } = useToast();
+
+  // Helper function to calculate total hours from sessions (matching route logic)
+  const calculateTotalHoursFromSessions = (sessions: AttendanceSession[]): number => {
+    if (!sessions || sessions.length === 0) return 0;
+    
+    let totalMinutes = 0;
+    
+    sessions.forEach(session => {
+      if (session.check_in) {
+        const checkIn = new Date(session.check_in);
+        const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+        
+        const diffInMs = checkOut.getTime() - checkIn.getTime();
+        const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+        
+        totalMinutes += diffInMinutes;
+      }
+    });
+    
+    return totalMinutes / 60; // Convert to hours
+  };
+
+  // Helper function to check if record has active session
+  const hasActiveSession = (record: AttendanceRecord): boolean => {
+    // Check for active session in new format
+    if (record.sessions && Array.isArray(record.sessions)) {
+      return record.sessions.some((s: AttendanceSession) => s.check_in && !s.check_out);
+    }
+    
+    // Fallback to old format
+    return !!(record.check_in_time && !record.check_out_time);
+  };
+
+  // Updated function to calculate today's hours using sessions
+  const calculateTodayHours = (record: AttendanceRecord | null): string => {
+    if (!record) return '-';
+    
+    // Use sessions data if available (new format)
+    if (record.sessions && record.sessions.length > 0) {
+      let totalMinutes = 0;
+      let hasActiveSession = false;
+      
+      record.sessions.forEach((session: AttendanceSession) => {
+        if (session.check_in) {
+          const checkIn = new Date(session.check_in);
+          const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+          
+          if (!session.check_out) hasActiveSession = true;
+          
+          const diffInMs = checkOut.getTime() - checkIn.getTime();
+          const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+          totalMinutes += diffInMinutes;
+        }
+      });
+      
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      return `${hours}h ${minutes}m`;
+    }
+    
+    // Fallback to old format
+    if (!record.check_in_time) return '-';
+    
+    const checkIn = new Date(record.check_in_time);
+    const checkOut = record.check_out_time ? new Date(record.check_out_time) : new Date();
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    return `${hours}h ${minutes}m`;
+  };
 
   // Update clock every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString());
       // Update today's hours if checked in
-      if (isCheckedIn && todayCheckIn) {
-        setTodayHours(calculateTodayHours(todayCheckIn, null));
+      if (isCheckedIn && todayRecord) {
+        setTodayHours(calculateTodayHours(todayRecord));
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [isCheckedIn, todayCheckIn]);
+  }, [isCheckedIn, todayRecord]);
 
   const fetchTokenAndUser = async () => {
     try {
@@ -88,28 +172,6 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
     }
   };
 
-  // Function to calculate today's hours worked
-  const calculateTodayHours = (checkInTime: string | null, checkOutTime: string | null) => {
-    if (!checkInTime) return '-';
-    
-    const checkIn = new Date(checkInTime);
-    const checkOut = checkOutTime ? new Date(checkOutTime) : new Date();
-    
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMinutes < 0) return '-';
-    
-    const hours = Math.floor(diffInMinutes / 60);
-    const minutes = diffInMinutes % 60;
-    
-    if (!checkOutTime) {
-      return `${hours}h ${minutes}m`;
-    }
-    
-    return `${hours}h ${minutes}m`;
-  };
-
   const fetchAttendanceStatus = async () => {
     try {
       const response = await fetch('/api/attendance/status', {
@@ -126,35 +188,20 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
       // Store raw attendance data
       setRawAttendanceData(data.attendanceData || []);
       
-      // Check if there's a record for today with check_in but no check_out
+      // Check if there's a record for today
       const today = new Date().toISOString().split('T')[0];
       const todayRecord = data.attendanceData.find((record: AttendanceRecord) => 
-        record.date.startsWith(today) && 
-        record.check_in_time && 
-        !record.check_out_time
+        record.date.startsWith(today)
       );
 
-      setIsCheckedIn(!!todayRecord);
-      
-      // Store today's check-in time for live hours calculation
       if (todayRecord) {
-        setTodayCheckIn(todayRecord.check_in_time);
-        setTodayHours(calculateTodayHours(todayRecord.check_in_time, null));
+        setTodayRecord(todayRecord);
+        setIsCheckedIn(hasActiveSession(todayRecord));
+        setTodayHours(calculateTodayHours(todayRecord));
       } else {
-        // Check if there's a completed record for today
-        const completedTodayRecord = data.attendanceData.find((record: AttendanceRecord) => 
-          record.date.startsWith(today) && 
-          record.check_in_time && 
-          record.check_out_time
-        );
-        
-        if (completedTodayRecord) {
-          setTodayCheckIn(null);
-          setTodayHours(calculateTodayHours(completedTodayRecord.check_in_time, completedTodayRecord.check_out_time));
-        } else {
-          setTodayCheckIn(null);
-          setTodayHours('-');
-        }
+        setTodayRecord(null);
+        setIsCheckedIn(false);
+        setTodayHours('-');
       }
 
       // Process attendance data for charts
@@ -165,12 +212,25 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
         absent: record.status.toLowerCase() === 'absent' ? 1 : 0,
       }));
 
-      // Process weekly hours
+      // UPDATED: Process weekly hours using sessions data
       const hoursData = data.attendanceData.map((record: AttendanceRecord) => {
         const date = new Date(record.date);
         let hours = 0;
 
-        if (record.check_in_time && record.check_out_time) {
+        // Use sessions data if available (new format)
+        if (record.sessions && Array.isArray(record.sessions)) {
+          // Only count completed sessions (those with check_out)
+          record.sessions.forEach((session: AttendanceSession) => {
+            if (session.check_in && session.check_out) {
+              const checkIn = new Date(session.check_in);
+              const checkOut = new Date(session.check_out);
+              const sessionHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+              hours += sessionHours;
+            }
+          });
+        } 
+        // Fallback to old format (only if completely checked out)
+        else if (record.check_in_time && record.check_out_time) {
           const checkIn = new Date(record.check_in_time);
           const checkOut = new Date(record.check_out_time);
           hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
@@ -248,14 +308,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
     return () => clearInterval(statusInterval);
   }, [employee_id]); // Re-run when employee_id changes
 
-  // Calculate statistics
+  // UPDATED: Calculate statistics with sessions support
   const { presentDays, lateDays, absentDays, totalHoursThisMonth } = React.useMemo(() => {
     // Get current month and year
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     
-    // Calculate total hours for current month from raw attendance data
+    // UPDATED: Calculate total hours for current month using sessions
     let totalMonthlyHours = 0;
     
     rawAttendanceData.forEach((record: AttendanceRecord) => {
@@ -263,31 +323,33 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
       
       // Check if record is from current month and year
       if (recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear) {
-        if (record.check_in_time) {
-          const checkIn = new Date(record.check_in_time);
-          let checkOut: Date;
-          
-          // If no check_out_time and it's today, use current time
-          if (!record.check_out_time) {
-            const today = new Date().toISOString().split('T')[0];
-            const recordDay = record.date.split('T')[0];
-            
-            if (recordDay === today) {
-              checkOut = new Date(); // Current time for ongoing session
-            } else {
-              return; // Skip incomplete past records
+        
+        // Use sessions data if available (new format)
+        if (record.sessions && Array.isArray(record.sessions)) {
+          record.sessions.forEach((session: AttendanceSession) => {
+            if (session.check_in && session.check_out) {
+              // Only count completed sessions
+              const checkIn = new Date(session.check_in);
+              const checkOut = new Date(session.check_out);
+              const sessionHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+              if (sessionHours > 0) {
+                totalMonthlyHours += sessionHours;
+              }
             }
-          } else {
-            checkOut = new Date(record.check_out_time);
-          }
-          
-          const diffInMs = checkOut.getTime() - checkIn.getTime();
-          const hours = diffInMs / (1000 * 60 * 60);
+          });
+        }
+        // Fallback to old format (only count completed work)
+        else if (record.check_in_time && record.check_out_time) {
+          const checkIn = new Date(record.check_in_time);
+          const checkOut = new Date(record.check_out_time);
+          const hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
           
           if (hours > 0) {
             totalMonthlyHours += hours;
           }
         }
+        // NOTE: We deliberately DON'T count ongoing sessions for monthly totals
+        // Only completed work sessions are counted
       }
     });
     
@@ -297,7 +359,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
       absentDays: attendanceData.reduce((sum, day) => sum + day.absent, 0),
       totalHoursThisMonth: totalMonthlyHours.toFixed(1)
     };
-  }, [attendanceData, weeklyHours, rawAttendanceData]);
+  }, [attendanceData, rawAttendanceData]);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 space-y-6">
@@ -359,14 +421,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
         </CardContent>
       </Card>
 
-      {/* Updated Statistics Cards - Now 4 cards */}
+      {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Present Days Card - Blue theme */}
         <Card className="shadow-md">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between p-4 bg-blue-200 rounded-lg">
               <div>
-                <p className="text-sm font-bold text-slate-900">Present Days</p>
+                <p className="text-sm font-bold text-slate-900">On Time Days</p>
                 <p className="text-3xl font-bold text-slate-900">{presentDays}</p>
               </div>
               <UserCheck className="w-12 h-12 text-blue-700" />
@@ -400,13 +462,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({  }) => {
           </CardContent>
         </Card>
 
-        {/* Monthly Hours Card - Green theme */}
+        {/* Monthly Hours Card - Green theme - UPDATED: Only counts completed work */}
         <Card className="shadow-md">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between p-4 bg-green-400 rounded-lg">
               <div>
                 <p className="text-sm font-bold text-slate-900">This Month</p>
                 <p className="text-2xl font-bold text-slate-900">{totalHoursThisMonth}h</p>
+                <p className="text-xs text-slate-700">Completed work only</p>
               </div>
               <Timer className="w-12 h-12 text-green-600" />
             </div>

@@ -16,6 +16,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { Clock, UserCheck, AlertTriangle, UserPlus } from 'lucide-react';
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+interface AttendanceSession {
+  check_in: string;
+  check_out?: string | null;
+}
+
 interface AttendanceRecord {
   id: number;
   employee_id: number;
@@ -24,6 +29,7 @@ interface AttendanceRecord {
   check_in_time: string | null;
   check_out_time: string | null;
   status: string;
+  sessions?: AttendanceSession[];
 }
 
 interface AdminDashboardProps {
@@ -35,6 +41,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [employee_id, setEmployeeId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null); // Add user role state
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [personalAttendance, setPersonalAttendance] = useState<any[]>([]);
   const [weeklyHours, setWeeklyHours] = useState<any[]>([]);
@@ -63,6 +70,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       const { user } = await response.json();
       setEmployeeName(user.name);
       setEmployeeId(user.id);
+      setUserRole(user.role); // Set user role
 
       await fetchAttendanceData();
     } catch (error) {
@@ -73,6 +81,88 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         variant: 'destructive',
       });
     }
+  };
+
+  // Helper function to calculate total hours from sessions (matching your route logic)
+  const calculateTotalHoursFromSessions = (sessions: AttendanceSession[]): number => {
+    if (!sessions || sessions.length === 0) return 0;
+    
+    let totalMinutes = 0;
+    
+    sessions.forEach(session => {
+      if (session.check_in) {
+        const checkIn = new Date(session.check_in);
+        const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+        
+        const diffInMs = checkOut.getTime() - checkIn.getTime();
+        const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+        
+        totalMinutes += diffInMinutes;
+      }
+    });
+    
+    return totalMinutes / 60; // Convert to hours
+  };
+
+  // Helper function to check if attendance has active session
+  const hasActiveSession = (attendance: AttendanceRecord): boolean => {
+    // Check for active session in new format
+    if (attendance.sessions && Array.isArray(attendance.sessions)) {
+      return attendance.sessions.some((s: AttendanceSession) => s.check_in && !s.check_out);
+    }
+    
+    // Fallback to old format
+    return !!(attendance.check_in_time && !attendance.check_out_time);
+  };
+
+  // FIXED: Updated function to calculate hours worked display
+  const calculateHoursWorked = (attendance: AttendanceRecord): string => {
+    // If sessions data exists, use that (new format)
+    if (attendance.sessions && attendance.sessions.length > 0) {
+      let totalMinutes = 0;
+      let hasActiveSession = false;
+      
+      attendance.sessions.forEach((session: AttendanceSession) => {
+        if (session.check_in) {
+          const checkIn = new Date(session.check_in);
+          const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+          
+          if (!session.check_out) hasActiveSession = true;
+          
+          const diffInMs = checkOut.getTime() - checkIn.getTime();
+          const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+          totalMinutes += diffInMinutes;
+        }
+      });
+      
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      if (hasActiveSession) {
+        return `${hours}h ${minutes}m *`; // Show ongoing for active sessions
+      }
+      return `${hours}h ${minutes}m`;
+    }
+    
+    // Fallback to old format for backward compatibility
+    if (!attendance.check_in_time) return '-';
+    
+    const checkIn = new Date(attendance.check_in_time);
+    const checkOut = attendance.check_out_time ? new Date(attendance.check_out_time) : new Date();
+    
+    const diffInMs = checkOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 0) return '-';
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    
+    if (!attendance.check_out_time) {
+      return `${hours}h ${minutes}m *`;
+    }
+    
+    return `${hours}h ${minutes}m`;
   };
 
   const fetchAttendanceData = async () => {
@@ -92,33 +182,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       setIsCheckedIn(data.isCheckedIn);
       setAttendanceData(data.attendanceData || []);
 
-       // Process personal attendance data for charts
-       const processedPersonalData = data.personalAttendance.map((record: any) => ({
-        date: new Date(record.date).toLocaleDateString(),
-        present: record.status.toLowerCase() === 'present' ? 1 : 0,
-        late: record.status.toLowerCase() === 'late' ? 1 : 0,
-        absent: record.status.toLowerCase() === 'absent' ? 1 : 0,
-      }));
-       // Process weekly hours
-       const processedWeeklyHours = data.personalAttendance.map((record: any) => {
-        const date = new Date(record.date);
-        let hours = 0;
+      // FIXED: Process personal attendance data for charts (only for non-admin)
+      if (data.personalAttendance) {
+        const processedPersonalData = data.personalAttendance.map((record: any) => ({
+          date: new Date(record.date).toLocaleDateString(),
+          present: record.status.toLowerCase() === 'present' ? 1 : 0,
+          late: record.status.toLowerCase() === 'late' ? 1 : 0,
+          absent: record.status.toLowerCase() === 'absent' ? 1 : 0,
+        }));
+        
+        // FIXED: Process weekly hours using sessions data
+        const processedWeeklyHours = data.personalAttendance.map((record: any) => {
+          const date = new Date(record.date);
+          let hours = 0;
 
-        if (record.check_in_time && record.check_out_time) {
-          const checkIn = new Date(record.check_in_time);
-          const checkOut = new Date(record.check_out_time);
-          hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-        }
+          // Use sessions data if available (new format)
+          if (record.sessions && Array.isArray(record.sessions)) {
+            hours = calculateTotalHoursFromSessions(record.sessions);
+          } 
+          // Fallback to old format
+          else if (record.check_in_time && record.check_out_time) {
+            const checkIn = new Date(record.check_in_time);
+            const checkOut = new Date(record.check_out_time);
+            hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+          }
 
-        return {
-          day: date.toLocaleDateString(),
-          hours: Number(hours.toFixed(2))
-        };
-      });
-      
-      setPersonalAttendance(processedPersonalData);
-      setWeeklyHours(processedWeeklyHours);
-
+          return {
+            day: date.toLocaleDateString(),
+            hours: Number(hours.toFixed(2))
+          };
+        });
+        
+        setPersonalAttendance(processedPersonalData);
+        setWeeklyHours(processedWeeklyHours);
+      }
   
     } catch (error) {
       console.error('Error fetching attendance:', error);
@@ -186,30 +283,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const formatTime = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleTimeString();
-  };
-
-  // Function to calculate hours worked
-  const calculateHoursWorked = (checkInTime: string | null, checkOutTime: string | null) => {
-    if (!checkInTime) return '-';
-    
-    // If not checked out yet, calculate from check-in to current time
-    const checkIn = new Date(checkInTime);
-    const checkOut = checkOutTime ? new Date(checkOutTime) : new Date();
-    
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMinutes < 0) return '-';
-    
-    const hours = Math.floor(diffInMinutes / 60);
-    const minutes = diffInMinutes % 60;
-    
-    if (!checkOutTime) {
-      // Still working - show ongoing time with indicator
-      return `${hours}h ${minutes}m *`;
-    }
-    
-    return `${hours}h ${minutes}m`;
   };
 
   const getTodayAttendance = () => {
@@ -299,7 +372,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white">
               <div>
-                <p className="text-sm font-medium opacity-90">Present Today</p>
+                <p className="text-sm font-medium opacity-90">On Time Today</p>
                 <p className="text-3xl font-bold">{presentToday}</p>
               </div>
               <UserCheck className="w-12 h-12 opacity-80" />
@@ -354,11 +427,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                       </TableCell>
                       <TableCell className="font-mono">
                         <span className={`${
-                          !attendance.check_out_time && attendance.check_in_time ? 'text-blue-600 font-semibold' : 'text-gray-700'
+                          hasActiveSession(attendance) ? 'text-blue-600 font-semibold' : 'text-gray-700'
                         }`}>
-                          {calculateHoursWorked(attendance.check_in_time, attendance.check_out_time)}
+                          {calculateHoursWorked(attendance)}
                         </span>
-                        {!attendance.check_out_time && attendance.check_in_time && (
+                        {hasActiveSession(attendance) && (
                           <span className="text-xs text-blue-500 ml-1">(ongoing)</span>
                         )}
                       </TableCell>
@@ -377,77 +450,79 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         </CardContent>
       </Card>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600">
-            <CardTitle className="text-white">Monthly Attendance Overview</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[300px] pt-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={personalAttendance}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 12 }}
-                  interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                />
-                <YAxis />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="present" fill="#22c55e" name="Present" />
-                <Bar dataKey="late" fill="#eab308" name="Late" />
-                <Bar dataKey="absent" fill="#ef4444" name="Absent" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {/* Charts - CHANGED: Only show for non-admin users */}
+      {userRole !== 'admin' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600">
+              <CardTitle className="text-white">Monthly Attendance Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px] pt-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={personalAttendance}>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                  />
+                  <YAxis />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      borderRadius: '8px',
+                      border: 'none',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Legend />
+                  <Bar dataKey="present" fill="#22c55e" name="Present" />
+                  <Bar dataKey="late" fill="#eab308" name="Late" />
+                  <Bar dataKey="absent" fill="#ef4444" name="Absent" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600">
-            <CardTitle className="text-white">Weekly Hours</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[300px] pt-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weeklyHours}>
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 12 }}
-                  interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                />
-                <YAxis />
-                <Tooltip
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="hours"
-                  stroke="#2563eb"
-                  name="Hours Worked"
-                  strokeWidth={2}
-                  dot={{ fill: '#2563eb' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600">
+              <CardTitle className="text-white">Weekly Hours</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px] pt-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weeklyHours}>
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                  />
+                  <YAxis />
+                  <Tooltip
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      borderRadius: '8px',
+                      border: 'none',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="hours"
+                    stroke="#2563eb"
+                    name="Hours Worked"
+                    strokeWidth={2}
+                    dot={{ fill: '#2563eb' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

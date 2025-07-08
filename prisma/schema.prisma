@@ -54,6 +54,7 @@ model Attendance {
   date           DateTime  @db.Date
   check_in_time  DateTime?
   check_out_time DateTime?
+  sessions       Json?
   status         String    @default("Absent") @db.VarChar(10)
   Employees      Employees @relation(fields: [employee_id], references: [id])
 
