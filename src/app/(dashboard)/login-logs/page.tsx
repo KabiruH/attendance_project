@@ -89,7 +89,7 @@ export default function AdminLoginLogsPage() {
         }
       });
 
-      const response = await fetch(`/api/admin/login-logs?${params.toString()}`);
+      const response = await fetch(`/api/login-logs?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch login logs');
