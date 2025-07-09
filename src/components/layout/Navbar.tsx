@@ -125,7 +125,7 @@ const Navbar = () => {
     ? [
         ...baseNavItems.slice(0, 4),
         {
-          label: 'Users',
+          label: 'Employees',
           icon: <Users size={20} />,
           href: '/users',
           type: 'link' as const
