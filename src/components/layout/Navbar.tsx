@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Menu, X, LayoutDashboard, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Shield, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -130,6 +130,12 @@ const Navbar = () => {
           href: '/users',
           type: 'link' as const
         },
+         {
+        label: 'Login Logs',
+        icon: <Shield size={20} />,
+        href: '/login-logs',
+        type: 'link' as const
+      },
         ...baseNavItems.slice(4)
       ]
     : baseNavItems;
