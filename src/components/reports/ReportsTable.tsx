@@ -26,6 +26,13 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     return <div>No records to display</div>;
   }
 
+  // Helper function to get 5pm cutoff time for a given date
+  const getFivePmCutoff = (date: Date): Date => {
+    const cutoff = new Date(date);
+    cutoff.setHours(17, 0, 0, 0); // Set to 5:00 PM
+    return cutoff;
+  };
+
   // Helper function to safely parse sessions from data
   const parseSessionsFromData = (record: AttendanceRecord): AttendanceSession[] => {
     // If sessions data exists, use it
@@ -60,7 +67,7 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     return false;
   };
 
-  // UPDATED: Function to calculate hours worked using sessions (same logic as other components)
+  // UPDATED: Function to calculate hours worked with 5pm auto-stop
   const calculateHoursWorked = (record: AttendanceRecord): string => {
     const sessions = parseSessionsFromData(record);
     
@@ -72,13 +79,30 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
       sessions.forEach((session: AttendanceSession) => {
         if (session.check_in) {
           const checkIn = new Date(session.check_in);
-          const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+          let checkOut: Date;
           
-          if (!session.check_out) hasActiveSession = true;
+          if (session.check_out) {
+            checkOut = new Date(session.check_out);
+          } else {
+            // No check out - use current time but cap at 5pm
+            hasActiveSession = true;
+            checkOut = new Date();
+          }
           
-          const diffInMs = checkOut.getTime() - checkIn.getTime();
-          const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
-          totalMinutes += diffInMinutes;
+          // Get 5pm cutoff for the check-in date
+          const fivePmCutoff = getFivePmCutoff(checkIn);
+          
+          // If check-out time is after 5pm, cap it at 5pm
+          if (checkOut > fivePmCutoff) {
+            checkOut = fivePmCutoff;
+          }
+          
+          // Only calculate if check-out is after check-in
+          if (checkOut > checkIn) {
+            const diffInMs = checkOut.getTime() - checkIn.getTime();
+            const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+            totalMinutes += diffInMinutes;
+          }
         }
       });
       
@@ -103,11 +127,28 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     const today = new Date().toDateString();
     const isToday = recordDate === today;
     
-    // If not checked out yet and it's today, calculate from checkIn to current time
     const checkIn = new Date(checkInStr);
-    const checkOut = checkOutStr ? new Date(checkOutStr) : (isToday ? new Date() : null);
+    let checkOut: Date;
     
-    if (!checkOut) return '-';
+    if (checkOutStr) {
+      checkOut = new Date(checkOutStr);
+    } else if (isToday) {
+      // If not checked out yet and it's today, use current time
+      checkOut = new Date();
+    } else {
+      return '-';
+    }
+    
+    // Get 5pm cutoff for the check-in date
+    const fivePmCutoff = getFivePmCutoff(checkIn);
+    
+    // If check-out time is after 5pm, cap it at 5pm
+    if (checkOut > fivePmCutoff) {
+      checkOut = fivePmCutoff;
+    }
+    
+    // Only calculate if check-out is after check-in
+    if (checkOut <= checkIn) return '-';
     
     const diffInMs = checkOut.getTime() - checkIn.getTime();
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60));

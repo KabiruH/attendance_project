@@ -28,7 +28,6 @@ export async function processAbsentRecords(date: Date = new Date()) {
         status: true
       }
     });
-
     const employeesWithRecords = new Set(existingRecords.map(record => record.employee_id));
     const potentialAbsentees = activeEmployees.filter(
       employee => !employeesWithRecords.has(employee.id)
