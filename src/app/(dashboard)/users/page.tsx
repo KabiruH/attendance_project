@@ -257,17 +257,17 @@ export default function UsersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="finance">Finance</SelectItem>
-                    <SelectItem value="hr">Human Resources</SelectItem>
-                    <SelectItem value="engineering">Engineering</SelectItem>
-                    <SelectItem value="marketing">Marketing</SelectItem>
-                    <SelectItem value="sales">Sales</SelectItem>
-                    <SelectItem value="operations">Operations</SelectItem>
-                    <SelectItem value="customer-service">Customer Service</SelectItem>
-                    <SelectItem value="legal">Legal</SelectItem>
-                    <SelectItem value="it">IT</SelectItem>
-                    <SelectItem value="procurement">Procurement</SelectItem>
-                    <SelectItem value="admin">Administration</SelectItem>
-                    <SelectItem value="executive">Executive</SelectItem>
+                    <SelectItem value="Human Resources">Human Resources</SelectItem>
+                    <SelectItem value="Engineering">Engineering</SelectItem>
+                    <SelectItem value="Marketing">Marketing</SelectItem>
+                    <SelectItem value="Sales">Sales</SelectItem>
+                    <SelectItem value="Operations">Operations</SelectItem>
+                    <SelectItem value="Customer Service">Customer Service</SelectItem>
+                    <SelectItem value="Legal">Legal</SelectItem>
+                    <SelectItem value="IT">IT</SelectItem>
+                    <SelectItem value="Procurement">Procurement</SelectItem>
+                    <SelectItem value="Administration">Administration</SelectItem>
+                    <SelectItem value="Executive">Executive</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
