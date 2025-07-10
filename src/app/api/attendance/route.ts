@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { processAutomaticAttendance } from '@/lib/utils/cronUtils';
 import { Prisma } from '@prisma/client';
 
+
 interface JwtPayload {
   id: number;
   email: string;
@@ -279,7 +280,7 @@ export async function GET(request: NextRequest) {
       record => record.date.toISOString().split('T')[0] === currentDate
     );
 
-   const currentTime = new Date(
+const currentTime = new Date(
   new Intl.DateTimeFormat('en-KE', {
     timeZone: 'Africa/Nairobi',
     hour12: false,
@@ -291,7 +292,8 @@ export async function GET(request: NextRequest) {
     second: '2-digit'
   }).format(new Date())
 );
-   // 🎯 UPDATED: Use sessions-aware check instead of check_out_time
+
+    // 🎯 UPDATED: Use sessions-aware check instead of check_out_time
     const isCheckedIn = hasActiveSession(todayAttendance) && 
                        currentTime.getHours() < TIME_CONSTRAINTS.WORK_END;
 
@@ -325,7 +327,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { action } = await request.json();
-    const currentTime = new Date();
+const currentTime = new Date(
+  new Intl.DateTimeFormat('en-KE', {
+    timeZone: 'Africa/Nairobi',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(new Date())
+);
+
     const currentDate = currentTime.toISOString().split('T')[0];
 
     const handler = action === 'check-in' ? handleCheckIn : 
