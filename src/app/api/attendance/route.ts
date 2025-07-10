@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { DateTime } from 'luxon'
 import { db } from '@/lib/db/db';
 import { cookies } from 'next/headers';
 import { processAutomaticAttendance } from '@/lib/utils/cronUtils';
@@ -48,19 +49,19 @@ async function verifyAuth(): Promise<JwtPayload> {
 // Helper function to safely parse sessions from Prisma Json field
 function parseSessionsFromJson(sessionsJson: any): WorkSession[] {
   if (!sessionsJson) return [];
-  
+
   try {
     // If it's already an array, return it
     if (Array.isArray(sessionsJson)) {
       return sessionsJson as WorkSession[];
     }
-    
+
     // If it's a string, try to parse it
     if (typeof sessionsJson === 'string') {
       const parsed = JSON.parse(sessionsJson);
       return Array.isArray(parsed) ? parsed as WorkSession[] : [];
     }
-    
+
     // For other types, return empty array
     return [];
   } catch (error) {
@@ -119,14 +120,14 @@ async function handleCheckIn(employee_id: number, currentTime: Date, currentDate
   if (existingAttendance) {
     // Get existing sessions using the safe parser
     const existingSessions: WorkSession[] = parseSessionsFromJson(existingAttendance.sessions);
-    
+
     // Check if there's an active session (checked in but not checked out)
     const activeSession = existingSessions.find(session => session.check_in && !session.check_out);
-    
+
     if (activeSession) {
       // Update the active session's check-in time
       activeSession.check_in = currentTime;
-      
+
       const attendance = await db.attendance.update({
         where: { id: existingAttendance.id },
         data: {
@@ -135,8 +136,8 @@ async function handleCheckIn(employee_id: number, currentTime: Date, currentDate
         },
       });
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         data: attendance,
         message: 'Check-in time updated for current session'
       };
@@ -154,8 +155,8 @@ async function handleCheckIn(employee_id: number, currentTime: Date, currentDate
         },
       });
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         data: attendance,
         message: 'New work session started'
       };
@@ -182,9 +183,9 @@ async function handleCheckIn(employee_id: number, currentTime: Date, currentDate
 
 async function handleCheckOut(employee_id: number, currentTime: Date, currentDate: string): Promise<AttendanceResponse> {
   if (currentTime.getHours() >= TIME_CONSTRAINTS.WORK_END) {
-    return { 
-      success: false, 
-      error: 'Manual check-out not allowed after 5 PM. System will automatically check you out.' 
+    return {
+      success: false,
+      error: 'Manual check-out not allowed after 5 PM. System will automatically check you out.'
     };
   }
 
@@ -208,7 +209,7 @@ async function handleCheckOut(employee_id: number, currentTime: Date, currentDat
 
   const attendance = await db.attendance.update({
     where: { id: existingAttendance.id },
-    data: { 
+    data: {
       check_out_time: currentTime, // Update for compatibility
       sessions: existingSessions as unknown as Prisma.JsonArray,
     },
@@ -220,14 +221,14 @@ async function handleCheckOut(employee_id: number, currentTime: Date, currentDat
 // Helper function to check if user has active session
 function hasActiveSession(attendance: any): boolean {
   if (!attendance) return false;
-  
+
   // Check sessions array first (new method)
   if (attendance.sessions && Array.isArray(attendance.sessions)) {
-    return attendance.sessions.some((session: WorkSession) => 
+    return attendance.sessions.some((session: WorkSession) =>
       session.check_in && !session.check_out
     );
   }
-  
+
   // Fallback to old method for backward compatibility
   return !!(attendance.check_in_time && !attendance.check_out_time);
 }
@@ -235,21 +236,21 @@ function hasActiveSession(attendance: any): boolean {
 // Helper function to calculate total hours from sessions
 function calculateTotalHoursFromSessions(sessions: WorkSession[]): number {
   if (!sessions || sessions.length === 0) return 0;
-  
+
   let totalMinutes = 0;
-  
+
   sessions.forEach(session => {
     if (session.check_in) {
       const checkIn = new Date(session.check_in);
       const checkOut = session.check_out ? new Date(session.check_out) : new Date();
-      
+
       const diffInMs = checkOut.getTime() - checkIn.getTime();
       const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
-      
+
       totalMinutes += diffInMinutes;
     }
   });
-  
+
   return totalMinutes / 60; // Convert to hours
 }
 
@@ -280,22 +281,12 @@ export async function GET(request: NextRequest) {
       record => record.date.toISOString().split('T')[0] === currentDate
     );
 
-const currentTime = new Date(
-  new Intl.DateTimeFormat('en-KE', {
-    timeZone: 'Africa/Nairobi',
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  }).format(new Date())
-);
+    const nowInKenya = DateTime.now().setZone('Africa/Nairobi');
+    const currentTime = nowInKenya.toJSDate();
 
     // 🎯 UPDATED: Use sessions-aware check instead of check_out_time
-    const isCheckedIn = hasActiveSession(todayAttendance) && 
-                       currentTime.getHours() < TIME_CONSTRAINTS.WORK_END;
+    const isCheckedIn = hasActiveSession(todayAttendance) &&
+      currentTime.getHours() < TIME_CONSTRAINTS.WORK_END;
 
     return NextResponse.json({
       success: true,
@@ -327,24 +318,12 @@ export async function POST(request: NextRequest) {
     }
 
     const { action } = await request.json();
-const currentTime = new Date(
-  new Intl.DateTimeFormat('en-KE', {
-    timeZone: 'Africa/Nairobi',
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  }).format(new Date())
-);
-
+    const currentTime = nowInKenya.toJSDate();
     const currentDate = currentTime.toISOString().split('T')[0];
 
-    const handler = action === 'check-in' ? handleCheckIn : 
-                   action === 'check-out' ? handleCheckOut : 
-                   null;
+    const handler = action === 'check-in' ? handleCheckIn :
+      action === 'check-out' ? handleCheckOut :
+        null;
 
     if (!handler) {
       return NextResponse.json(
