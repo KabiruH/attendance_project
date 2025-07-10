@@ -316,7 +316,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
-
+    const nowInKenya = DateTime.now().setZone('Africa/Nairobi');
     const { action } = await request.json();
     const currentTime = nowInKenya.toJSDate();
     const currentDate = currentTime.toISOString().split('T')[0];
