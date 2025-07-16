@@ -25,14 +25,14 @@ export default function LoginForm() {
         if (window.PublicKeyCredential) {
           console.log('WebAuthn is supported in this browser');
           setBiometricSupported(true);
-          
+
           // Check if we're in a secure context
           if (window.isSecureContext) {
             console.log('Running in a secure context');
           } else {
             console.warn('NOT running in a secure context - WebAuthn may not work');
           }
-          
+
         } else {
           setBiometricSupported(false);
         }
@@ -42,14 +42,14 @@ export default function LoginForm() {
       }
     }
   }, []);
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       const isLocationAllowed = await checkLocation();
-      
+
       if (!isLocationAllowed) {
         toast({
           title: "Access Denied",
@@ -59,7 +59,7 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
-      
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -97,7 +97,7 @@ export default function LoginForm() {
 
       // Redirect to dashboard
       router.push('/dashboard');
-      
+
     } catch (error) {
       toast({
         title: "Error",
@@ -109,186 +109,189 @@ export default function LoginForm() {
     }
   };
 
-const handleBiometricLogin = async () => {
-  if (!email) {
-    toast({
-      title: "Email Required",
-      description: "Please enter your email first",
-      variant: "destructive",
-    });
-    return;
-  }
-  
-  setBiometricLoading(true);
-  
-  try {
-    // Check location first
-    const isLocationAllowed = await checkLocation();
-    
-    if (!isLocationAllowed) {
+  const handleBiometricLogin = async () => {
+    if (!email) {
       toast({
-        title: "Access Denied",
-        description: "You must be within the allowed area to access this application",
-        variant: "destructive"
+        title: "Email Required",
+        description: "Please enter your email first",
+        variant: "destructive",
       });
-      setBiometricLoading(false);
       return;
     }
-    
-    // Find user ID number from email
-    const idLookupResponse = await fetch('/api/auth/get-id-from-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email }),
-    });
-    
-    if (!idLookupResponse.ok) {
-      const errorData = await idLookupResponse.json();
-      console.error('ID lookup error:', errorData);
-      if (errorData.error === 'User not found') {
+
+    setBiometricLoading(true);
+
+    try {
+      // Check location first
+      const isLocationAllowed = await checkLocation();
+
+      if (!isLocationAllowed) {
         toast({
-          title: "User Not Found",
-          description: "No account found with this email",
-          variant: "destructive",
+          title: "Access Denied",
+          description: "You must be within the allowed area to access this application",
+          variant: "destructive"
         });
         setBiometricLoading(false);
         return;
       }
-      throw new Error(errorData.error || 'Failed to retrieve user ID');
-    }
-    
-    const { idNumber } = await idLookupResponse.json();
-    
-    if (!idNumber) {
-      throw new Error('Could not determine your ID number');
-    }
-    
-    // 1. Request authentication options from server
-    const optionsResponse = await fetch('/api/webauthn/generate-authentication-options', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username: idNumber }),
-    });
-    
-    if (!optionsResponse.ok) {
-      // Handle specific error for no credentials found
-      if (optionsResponse.status === 400) {
-        const errorData = await optionsResponse.json();
-        console.error('Auth options error:', errorData);
-        if (errorData.error === 'No registered credentials found for user') {
+
+      // Find user ID number from email
+      const idLookupResponse = await fetch('/api/auth/get-id-from-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!idLookupResponse.ok) {
+        const errorData = await idLookupResponse.json();
+        console.error('ID lookup error:', errorData);
+        if (errorData.error === 'User not found') {
           toast({
-            title: "No Biometric Found",
-            description: "You need to register your fingerprint first. Please login with password.",
+            title: "User Not Found",
+            description: "No account found with this email",
             variant: "destructive",
           });
           setBiometricLoading(false);
           return;
         }
+        throw new Error(errorData.error || 'Failed to retrieve user ID');
       }
-      
-      const errorData = await optionsResponse.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || 'Failed to get authentication options');
-    }
-    
-    const options = await optionsResponse.json();
-    console.log('Received authentication options:', {
-      challenge: options.challenge ? options.challenge.substring(0, 10) + '...' : 'MISSING',
-      rpId: options.rpId || 'NOT SET',
-      allowCredentials: options.allowCredentials?.length || 0,
-      timeout: options.timeout || 'default',
-      userVerification: options.userVerification || 'default'
-    });
-    
-    // Make sure allowCredentials is properly formatted
-    if (!options.allowCredentials || !Array.isArray(options.allowCredentials) || options.allowCredentials.length === 0) {
-      console.error('Invalid allowCredentials in options:', options.allowCredentials);
-      throw new Error('Invalid authentication options received from server');
-    }
-    
-    // ✅ CRITICAL FIX: Do NOT override the rpId from server
-    // Trust the server's rpId completely
-    console.log('Using server rpId:', options.rpId);
-    
-    // Add proper timeout if missing
-    if (!options.timeout) {
-      options.timeout = 60000; // 1 minute
-    }
 
-    // ✅ CRITICAL FIX: Call directly without setTimeout
-    const authenticationResponse = await startAuthentication(options);
-    
-    // 3. Send the response to the server for verification
-    const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        authenticationResponse,
-        username: idNumber,
-      }),
-    });
-    
-    if (!verificationResponse.ok) {
-      const errorData = await verificationResponse.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('Verification error:', errorData);
-      throw new Error(errorData.error || 'Authentication failed');
-    }
-    
-    const verificationResult = await verificationResponse.json();
-    
-    if (verificationResult.verified) {
-      // 4. Using the server response to complete biometric login
-      const loginResponse = await fetch('/api/auth/login', {
+      const { idNumber } = await idLookupResponse.json();
+
+      if (!idNumber) {
+        throw new Error('Could not determine your ID number');
+      }
+
+      // 1. Request authentication options from server
+      const optionsResponse = await fetch('/api/webauthn/generate-authentication-options', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: idNumber }),
+      });
+
+      if (!optionsResponse.ok) {
+        // Handle specific error for no credentials found
+        if (optionsResponse.status === 400) {
+          const errorData = await optionsResponse.json();
+          console.error('Auth options error:', errorData);
+          if (errorData.error === 'No registered credentials found for user') {
+            toast({
+              title: "No Biometric Found",
+              description: "You need to register your fingerprint first. Please login with password.",
+              variant: "destructive",
+            });
+            setBiometricLoading(false);
+            return;
+          }
+        }
+
+        const errorData = await optionsResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to get authentication options');
+      }
+
+      const options = await optionsResponse.json();
+      console.log('Received authentication options:', {
+        challenge: options.challenge ? options.challenge.substring(0, 10) + '...' : 'MISSING',
+        rpId: options.rpId || 'NOT SET',
+        allowCredentials: options.allowCredentials?.length || 0,
+        timeout: options.timeout || 'default',
+        userVerification: options.userVerification || 'default'
+      });
+
+      // Make sure allowCredentials is properly formatted
+      if (!options.allowCredentials || !Array.isArray(options.allowCredentials) || options.allowCredentials.length === 0) {
+        console.error('Invalid allowCredentials in options:', options.allowCredentials);
+        throw new Error('Invalid authentication options received from server');
+      }
+
+      // ✅ CRITICAL FIX: Do NOT override the rpId from server
+      // Trust the server's rpId completely
+      console.log('Using server rpId:', options.rpId);
+
+      // Add proper timeout if missing
+      if (!options.timeout) {
+        options.timeout = 60000; // 1 minute
+      }
+
+      // ✅ CRITICAL FIX: Call directly without setTimeout
+      const authenticationResponse = await startAuthentication({
+        optionsJSON: options,
+      });
+
+
+      // 3. Send the response to the server for verification
+      const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id: verificationResult.user.id,  
-          email: verificationResult.user.email,
-          biometricAuth: true,
+          authenticationResponse,
+          username: idNumber,
         }),
       });
-      
-      if (!loginResponse.ok) {
-        const errorData = await loginResponse.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Biometric login error:', errorData);
-        throw new Error(errorData.error || 'Login failed');
+
+      if (!verificationResponse.ok) {
+        const errorData = await verificationResponse.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Verification error:', errorData);
+        throw new Error(errorData.error || 'Authentication failed');
       }
-      
-      // Show success message
-      toast({
-        title: "Success!",
-        description: "Logged in successfully with biometrics",
-      });
-      
-      // Redirect to dashboard
-      router.push('/dashboard');
-    } else {
-      throw new Error('Authentication verification failed');
+
+      const verificationResult = await verificationResponse.json();
+
+      if (verificationResult.verified) {
+        // 4. Using the server response to complete biometric login
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: verificationResult.user.id,
+            email: verificationResult.user.email,
+            biometricAuth: true,
+          }),
+        });
+
+        if (!loginResponse.ok) {
+          const errorData = await loginResponse.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Biometric login error:', errorData);
+          throw new Error(errorData.error || 'Login failed');
+        }
+
+        // Show success message
+        toast({
+          title: "Success!",
+          description: "Logged in successfully with biometrics",
+        });
+
+        // Redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        throw new Error('Authentication verification failed');
+      }
+
+    } catch (error: any) {
+      handleAuthError(error);
+    } finally {
+      setBiometricLoading(false);
     }
-    
-  } catch (error: any) {
-    handleAuthError(error);
-  } finally {
-    setBiometricLoading(false);
-  }
-};
-  
+  };
+
   const handleAuthError = (error: any) => {
     console.error('Biometric login error:', error);
-    
+
     // User-friendly error message based on error type
     let errorMessage = 'Authentication failed';
-    
+
     if (error.name === 'NotAllowedError') {
       errorMessage = 'Biometric verification was denied or cancelled';
-      
+
       if (error.message.includes('CredentialContainer request is not allowed')) {
         errorMessage = 'Authentication not allowed - please ensure you\'re using HTTPS or localhost';
       }
@@ -301,7 +304,7 @@ const handleBiometricLogin = async () => {
     } else if (error instanceof Error) {
       errorMessage = error.message;
     }
-    
+
     toast({
       title: "Login Failed",
       description: errorMessage,
@@ -315,17 +318,17 @@ const handleBiometricLogin = async () => {
         {/* Header Icon */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-            <svg 
-              className="w-8 h-8 text-blue-600" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-8 h-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
               />
             </svg>
           </div>
@@ -353,10 +356,10 @@ const handleBiometricLogin = async () => {
                 required
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2">
-                <svg 
-                  className="w-5 h-5 text-gray-400" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <svg
+                  className="w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4Z" />
@@ -364,7 +367,7 @@ const handleBiometricLogin = async () => {
                 </svg>
               </span>
             </div>
-            
+
             {/* Biometric Login Button - Only after email is entered */}
             {biometricSupported && email && (
               <button
@@ -414,10 +417,10 @@ const handleBiometricLogin = async () => {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2"
               >
-                <svg 
-                  className="w-5 h-5 text-gray-400" 
-                  fill="none" 
-                  stroke="currentColor" 
+                <svg
+                  className="w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   {showPassword ? (
