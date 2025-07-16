@@ -209,14 +209,19 @@ const handleBiometricLogin = async () => {
       throw new Error('Invalid authentication options received from server');
     }
     
-    // ✅ CRITICAL FIX: Do NOT override the rpId from server
-    // Trust the server's rpId completely
-    console.log('Using server rpId:', options.rpId);
-    
     // Add proper timeout if missing
     if (!options.timeout) {
       options.timeout = 60000; // 1 minute
     }
+
+    // Add this right before startAuthentication call
+console.log('=== ALLOWCREDENTIALS DEBUG ===');
+console.log('allowCredentials count:', options.allowCredentials?.length);
+console.log('allowCredentials details:', options.allowCredentials?.map((cred: { id: string; type: any; transports: any; }) => ({
+  id: cred.id.substring(0, 20) + '...',
+  type: cred.type,
+  transports: cred.transports
+})));
 
     // ✅ CRITICAL FIX: Call with correct parameter format
     const authenticationResponse = await startAuthentication({
