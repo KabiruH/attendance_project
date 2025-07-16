@@ -214,19 +214,20 @@ const handleBiometricLogin = async () => {
       options.timeout = 60000; // 1 minute
     }
 
-    // Add this right before startAuthentication call
-console.log('=== ALLOWCREDENTIALS DEBUG ===');
-console.log('allowCredentials count:', options.allowCredentials?.length);
-console.log('allowCredentials details:', options.allowCredentials?.map((cred: { id: string; type: any; transports: any; }) => ({
-  id: cred.id.substring(0, 20) + '...',
-  type: cred.type,
-  transports: cred.transports
-})));
+    console.log('=== CLEAN TEST - CLIENT DEBUG ===');
+    console.log('Domain:', window.location.hostname);
+    console.log('Origin:', window.location.origin);
+    console.log('Protocol:', window.location.protocol);
+    console.log('Options received:', options);
+    console.log('allowCredentials count:', options.allowCredentials?.length);
+    console.log('allowCredentials details:', options.allowCredentials);
 
-    // ✅ CRITICAL FIX: Call with correct parameter format
+    // 2. Call WebAuthn
     const authenticationResponse = await startAuthentication({
       optionsJSON: options
     });
+
+    console.log('✅ WEBAUTHN SUCCESS! Response ID:', authenticationResponse.id);
     
     // 3. Send the response to the server for verification
     const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
@@ -280,7 +281,8 @@ console.log('allowCredentials details:', options.allowCredentials?.map((cred: { 
       throw new Error('Authentication verification failed');
     }
     
-  } catch (error: any) {
+  } catch (error: unknown) {
+    console.error('❌ BIOMETRIC LOGIN FAILED:', error);
     handleAuthError(error);
   } finally {
     setBiometricLoading(false);
