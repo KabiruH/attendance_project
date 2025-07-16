@@ -18,7 +18,7 @@ interface BiometricRegistrationProps {
   userId: number;
 }
 
-export function BiometricRegistration({ userId }: BiometricRegistrationProps){
+export function BiometricRegistration({ userId }: BiometricRegistrationProps) {
   const [registeredCredentials, setRegisteredCredentials] = useState<Credential[]>([]);
   const [isRegistering, setIsRegistering] = useState(false);
   const [loadingCredentials, setLoadingCredentials] = useState(true);
@@ -27,7 +27,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
   const [actualUserId, setActualUserId] = useState<number | null>(null);
   const [idNumber, setIdNumber] = useState<string | null>(null); // ✅ Add state for id_number
   const { toast } = useToast();
-  
+
   // Debug - log received userId
   useEffect(() => { // Fetch the actual user ID from JWT on component mount
     fetchActualUserId();
@@ -38,7 +38,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
     if (typeof window !== 'undefined') {
       if (!window.PublicKeyCredential) {
         setSupported(false);
-      } 
+      }
     }
   }, []);
 
@@ -56,7 +56,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         credentials: 'include',
       });
       const data = await response.json();
-      
+
       if (!response.ok) {
         console.error('Failed to fetch current user data');
         setAuthError('Authentication failed. Please log in again.');
@@ -64,16 +64,16 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
 
       const id_number = data.user?.id_number;
-      
+
       // corresponds to the ID in the Users table
       const jwtUserId = data.user?.userId || data.user?.id;
-      
+
       if (!jwtUserId) {
         console.error('Could not determine user ID from JWT');
         setAuthError('Could not determine your user ID');
         return;
       }
-      
+
       setActualUserId(Number(jwtUserId));
       setIdNumber(id_number); // ✅ Store id_number in state
     } catch (error) {
@@ -84,20 +84,20 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
 
   const fetchCredentials = async () => {
     if (!actualUserId) return;
-    
+
     setLoadingCredentials(true);
     try {
-      
+
       const response = await fetch('/api/webauthn/credentials', {
         credentials: 'include',
       });
-      
+
       if (response.status === 401) {
         setAuthError('You must be logged in to manage biometric credentials');
         setLoadingCredentials(false);
         return;
       }
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         console.error('Failed to fetch credentials:', errorData);
@@ -128,7 +128,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       });
       return;
     }
-    
+
     if (!idNumber) {
       toast({
         title: "Error",
@@ -137,13 +137,13 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       });
       return;
     }
-    
+
     setIsRegistering(true);
-    
+
     try {
       // Use the actual user ID from JWT instead of the prop
       const userIdToUse = actualUserId;
-      
+
       // 1. Get registration options from the server
       const optionsResponse = await fetch('/api/webauthn/generate-registration-options', {
         method: 'POST',
@@ -158,7 +158,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         setAuthError('You must be logged in to register biometrics');
         throw new Error('You must be logged in to register biometrics');
       }
-      
+
       if (!optionsResponse.ok) {
         const errorData = await optionsResponse.json().catch(() => ({ error: 'Unknown error' }));
         console.error('Failed to get registration options:', errorData);
@@ -166,9 +166,11 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
       }
 
       const options = await optionsResponse.json();
-    
+
       // 2. Pass the options to the browser's WebAuthn API
-      const registrationResponse = await startRegistration(options);
+      const registrationResponse = await startRegistration({
+        optionsJSON: options
+      });
 
       // 3. Send the response to the server to verify and save
       const verificationResponse = await fetch('/api/webauthn/verify-registration', {
@@ -179,7 +181,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         credentials: 'include',
         body: JSON.stringify({
           registrationResponse,
-          id_number: idNumber, 
+          id_number: idNumber,
         }),
       });
 
@@ -193,20 +195,20 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
 
       // 4. Registration successful
       await fetchCredentials();
-      
+
       toast({
         title: "Success",
         description: "Biometric credential registered successfully",
       });
     } catch (error: unknown) {
       console.error('Registration error:', error);
-      
+
       // More detailed error handling
       let errorMessage = 'Could not register biometric credential';
-      
+
       if (error instanceof Error) {
         errorMessage = error.message;
-        
+
         // Handle common WebAuthn errors
         if (error.name === 'NotAllowedError') {
           errorMessage = 'The operation was canceled by the user or another error occurred during user verification.';
@@ -216,7 +218,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
           errorMessage = 'This device or browser doesn\'t support the requested authentication method.';
         }
       }
-      
+
       toast({
         title: "Registration Failed",
         description: errorMessage,
@@ -242,7 +244,7 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
 
       // Refresh the list of credentials
       await fetchCredentials();
-      
+
       toast({
         title: "Success",
         description: "Biometric credential removed successfully",
@@ -347,9 +349,9 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
                           {new Date(cred.created_at).toLocaleDateString()}
                         </span>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => removeCredential(cred.credentialId)}
                         className="text-red-500 hover:text-red-700 hover:bg-red-50"
                       >
@@ -372,9 +374,9 @@ export function BiometricRegistration({ userId }: BiometricRegistrationProps){
         )}
       </CardContent>
       <CardFooter>
-        <Button 
-          onClick={registerBiometric} 
-          disabled={isRegistering || !actualUserId || !idNumber} 
+        <Button
+          onClick={registerBiometric}
+          disabled={isRegistering || !actualUserId || !idNumber}
           className="w-full"
         >
           {isRegistering ? (

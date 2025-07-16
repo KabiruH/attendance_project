@@ -109,179 +109,178 @@ export default function LoginForm() {
     }
   };
 
-  const handleBiometricLogin = async () => {
-    if (!email) {
+const handleBiometricLogin = async () => {
+  if (!email) {
+    toast({
+      title: "Email Required",
+      description: "Please enter your email first",
+      variant: "destructive",
+    });
+    return;
+  }
+  
+  setBiometricLoading(true);
+  
+  try {
+    // Check location first
+    const isLocationAllowed = await checkLocation();
+    
+    if (!isLocationAllowed) {
       toast({
-        title: "Email Required",
-        description: "Please enter your email first",
-        variant: "destructive",
+        title: "Access Denied",
+        description: "You must be within the allowed area to access this application",
+        variant: "destructive"
       });
+      setBiometricLoading(false);
       return;
     }
-
-    setBiometricLoading(true);
-
-    try {
-      // Check location first
-      const isLocationAllowed = await checkLocation();
-
-      if (!isLocationAllowed) {
+    
+    // Find user ID number from email
+    const idLookupResponse = await fetch('/api/auth/get-id-from-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+    
+    if (!idLookupResponse.ok) {
+      const errorData = await idLookupResponse.json();
+      console.error('ID lookup error:', errorData);
+      if (errorData.error === 'User not found') {
         toast({
-          title: "Access Denied",
-          description: "You must be within the allowed area to access this application",
-          variant: "destructive"
+          title: "User Not Found",
+          description: "No account found with this email",
+          variant: "destructive",
         });
         setBiometricLoading(false);
         return;
       }
-
-      // Find user ID number from email
-      const idLookupResponse = await fetch('/api/auth/get-id-from-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!idLookupResponse.ok) {
-        const errorData = await idLookupResponse.json();
-        console.error('ID lookup error:', errorData);
-        if (errorData.error === 'User not found') {
+      throw new Error(errorData.error || 'Failed to retrieve user ID');
+    }
+    
+    const { idNumber } = await idLookupResponse.json();
+    
+    if (!idNumber) {
+      throw new Error('Could not determine your ID number');
+    }
+    
+    // 1. Request authentication options from server
+    const optionsResponse = await fetch('/api/webauthn/generate-authentication-options', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username: idNumber }),
+    });
+    
+    if (!optionsResponse.ok) {
+      // Handle specific error for no credentials found
+      if (optionsResponse.status === 400) {
+        const errorData = await optionsResponse.json();
+        console.error('Auth options error:', errorData);
+        if (errorData.error === 'No registered credentials found for user') {
           toast({
-            title: "User Not Found",
-            description: "No account found with this email",
+            title: "No Biometric Found",
+            description: "You need to register your fingerprint first. Please login with password.",
             variant: "destructive",
           });
           setBiometricLoading(false);
           return;
         }
-        throw new Error(errorData.error || 'Failed to retrieve user ID');
       }
+      
+      const errorData = await optionsResponse.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || 'Failed to get authentication options');
+    }
+    
+    const options = await optionsResponse.json();
+    console.log('Received authentication options:', {
+      challenge: options.challenge ? options.challenge.substring(0, 10) + '...' : 'MISSING',
+      rpId: options.rpId || 'NOT SET',
+      allowCredentials: options.allowCredentials?.length || 0,
+      timeout: options.timeout || 'default',
+      userVerification: options.userVerification || 'default'
+    });
+    
+    // Make sure allowCredentials is properly formatted
+    if (!options.allowCredentials || !Array.isArray(options.allowCredentials) || options.allowCredentials.length === 0) {
+      console.error('Invalid allowCredentials in options:', options.allowCredentials);
+      throw new Error('Invalid authentication options received from server');
+    }
+    
+    // ✅ CRITICAL FIX: Do NOT override the rpId from server
+    // Trust the server's rpId completely
+    console.log('Using server rpId:', options.rpId);
+    
+    // Add proper timeout if missing
+    if (!options.timeout) {
+      options.timeout = 60000; // 1 minute
+    }
 
-      const { idNumber } = await idLookupResponse.json();
-
-      if (!idNumber) {
-        throw new Error('Could not determine your ID number');
-      }
-
-      // 1. Request authentication options from server
-      const optionsResponse = await fetch('/api/webauthn/generate-authentication-options', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: idNumber }),
-      });
-
-      if (!optionsResponse.ok) {
-        // Handle specific error for no credentials found
-        if (optionsResponse.status === 400) {
-          const errorData = await optionsResponse.json();
-          console.error('Auth options error:', errorData);
-          if (errorData.error === 'No registered credentials found for user') {
-            toast({
-              title: "No Biometric Found",
-              description: "You need to register your fingerprint first. Please login with password.",
-              variant: "destructive",
-            });
-            setBiometricLoading(false);
-            return;
-          }
-        }
-
-        const errorData = await optionsResponse.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || 'Failed to get authentication options');
-      }
-
-      const options = await optionsResponse.json();
-      console.log('Received authentication options:', {
-        challenge: options.challenge ? options.challenge.substring(0, 10) + '...' : 'MISSING',
-        rpId: options.rpId || 'NOT SET',
-        allowCredentials: options.allowCredentials?.length || 0,
-        timeout: options.timeout || 'default',
-        userVerification: options.userVerification || 'default'
-      });
-
-      // Make sure allowCredentials is properly formatted
-      if (!options.allowCredentials || !Array.isArray(options.allowCredentials) || options.allowCredentials.length === 0) {
-        console.error('Invalid allowCredentials in options:', options.allowCredentials);
-        throw new Error('Invalid authentication options received from server');
-      }
-
-      // ✅ CRITICAL FIX: Do NOT override the rpId from server
-      // Trust the server's rpId completely
-      console.log('Using server rpId:', options.rpId);
-
-      // Add proper timeout if missing
-      if (!options.timeout) {
-        options.timeout = 60000; // 1 minute
-      }
-
-      // ✅ CRITICAL FIX: Call directly without setTimeout
-      const authenticationResponse = await startAuthentication({
-        optionsJSON: options,
-      });
-
-
-      // 3. Send the response to the server for verification
-      const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
+    // ✅ CRITICAL FIX: Call with correct parameter format
+    const authenticationResponse = await startAuthentication({
+      optionsJSON: options
+    });
+    
+    // 3. Send the response to the server for verification
+    const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        authenticationResponse,
+        username: idNumber,
+      }),
+    });
+    
+    if (!verificationResponse.ok) {
+      const errorData = await verificationResponse.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('Verification error:', errorData);
+      throw new Error(errorData.error || 'Authentication failed');
+    }
+    
+    const verificationResult = await verificationResponse.json();
+    
+    if (verificationResult.verified) {
+      // 4. Using the server response to complete biometric login
+      const loginResponse = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          authenticationResponse,
-          username: idNumber,
+          id: verificationResult.user.id,  
+          email: verificationResult.user.email,
+          biometricAuth: true,
         }),
       });
-
-      if (!verificationResponse.ok) {
-        const errorData = await verificationResponse.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Verification error:', errorData);
-        throw new Error(errorData.error || 'Authentication failed');
+      
+      if (!loginResponse.ok) {
+        const errorData = await loginResponse.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Biometric login error:', errorData);
+        throw new Error(errorData.error || 'Login failed');
       }
-
-      const verificationResult = await verificationResponse.json();
-
-      if (verificationResult.verified) {
-        // 4. Using the server response to complete biometric login
-        const loginResponse = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id: verificationResult.user.id,
-            email: verificationResult.user.email,
-            biometricAuth: true,
-          }),
-        });
-
-        if (!loginResponse.ok) {
-          const errorData = await loginResponse.json().catch(() => ({ error: 'Unknown error' }));
-          console.error('Biometric login error:', errorData);
-          throw new Error(errorData.error || 'Login failed');
-        }
-
-        // Show success message
-        toast({
-          title: "Success!",
-          description: "Logged in successfully with biometrics",
-        });
-
-        // Redirect to dashboard
-        router.push('/dashboard');
-      } else {
-        throw new Error('Authentication verification failed');
-      }
-
-    } catch (error: any) {
-      handleAuthError(error);
-    } finally {
-      setBiometricLoading(false);
+      
+      // Show success message
+      toast({
+        title: "Success!",
+        description: "Logged in successfully with biometrics",
+      });
+      
+      // Redirect to dashboard
+      router.push('/dashboard');
+    } else {
+      throw new Error('Authentication verification failed');
     }
-  };
+    
+  } catch (error: any) {
+    handleAuthError(error);
+  } finally {
+    setBiometricLoading(false);
+  }
+};
 
   const handleAuthError = (error: any) => {
     console.error('Biometric login error:', error);
