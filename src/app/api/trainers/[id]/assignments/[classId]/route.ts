@@ -42,7 +42,7 @@ async function verifyAuth() {
 // DELETE /api/trainers/[id]/assignments/[classId] - Remove specific class assignment
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; classId: string }> }
+  context: { params: Promise<{ id: string; classId: string }> }
 ) {
   try {
     const authResult = await verifyAuth();
@@ -55,9 +55,9 @@ export async function DELETE(
     }
 
     const { user } = authResult;
-    const resolvedParams = await params;
-    const trainerId = parseInt(resolvedParams.id);
-    const classId = parseInt(resolvedParams.classId);
+    const params = await context.params;
+    const trainerId = parseInt(params.id);
+    const classId = parseInt(params.classId);
 
     if (isNaN(trainerId) || isNaN(classId)) {
       return NextResponse.json(

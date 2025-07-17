@@ -42,7 +42,7 @@ async function verifyAuth() {
 // GET /api/trainers/[id]/my-classes - Fetch trainer's assigned classes with attendance info
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAuth();
@@ -55,8 +55,8 @@ export async function GET(
     }
 
     const { user } = authResult;
-    const resolvedParams = await params;
-    const trainerId = parseInt(resolvedParams.id);
+    const params = await context.params;
+    const trainerId = parseInt(params.id);
 
     if (isNaN(trainerId)) {
       return NextResponse.json(
