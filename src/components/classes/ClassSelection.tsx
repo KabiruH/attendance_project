@@ -136,6 +136,17 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
           {selectedClassIds.length} of {availableClasses.length} classes selected
         </div>
       </div>
+       {availableClasses.length > 0 && (
+        <div className="flex justify-end pt-4 border-t">
+          <Button 
+            onClick={handleSaveSelections}
+            disabled={isSaving}
+            className="min-w-[120px]"
+          >
+            {isSaving ? 'Saving...' : 'Save Selection'}
+          </Button>
+        </div>
+      )}
 
       {error && (
         <Alert variant="destructive">
