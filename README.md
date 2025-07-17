@@ -9,9 +9,11 @@ A modern web application built with Next.js 14, TypeScript, Prisma, and SQL Serv
 - Role-based access control (Admin and Employee)
 - Password change functionality
 - Geo-fencing for location-based access
+- Biometric registration on android, ios, and windows
 
 ### Employee Features
 - Check-in and check-out functionality
+- Check-in and check-out functionality via biometrics
 - View personal attendance history
 - Monthly attendance overview
 - Weekly hours visualization
