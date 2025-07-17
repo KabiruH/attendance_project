@@ -6,7 +6,7 @@ import {
   SidebarGroup,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon, Shield } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, FileBarChart, BookIcon, Users, LogOut, User as UserIcon, Shield } from "lucide-react";
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -109,6 +109,12 @@ export function DashboardSidebar() {
       label: 'Reports',
       icon: <FileBarChart size={20} />,
       href: '/reports',
+      type: 'link'
+    },
+      {
+      label: 'Classes',
+      icon: <BookIcon size={20} />,
+      href: '/classes',
       type: 'link'
     },
     {

@@ -23,10 +23,6 @@ interface WorkSession {
   check_in: Date;
   check_out?: Date;
 }
-interface AttendanceSession {
-  check_in: string;
-  check_out?: string | null;
-}
 
 const TIME_CONSTRAINTS = {
   CHECK_IN_START: 7,  // 7 AM

@@ -58,24 +58,6 @@ function Attendance() {
         throw new Error("Failed to fetch attendance data");
       }
 
-      function formatDate(dateString: string | null) {
-        if (!dateString) return '';
-        return new Date(dateString).toLocaleDateString();
-      }
-      
-      function formatTime(timeString: string | null) {
-        if (!timeString) return null;
-        try {
-          return new Date(timeString).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-          });
-        } catch {
-          return null;
-        }
-      }
-
       const response: AttendanceResponse = await attendanceResponse.json();
 
       if (user.role === "admin") {

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Menu, X, LayoutDashboard, Shield, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Shield, BookIcon, ClipboardCheck, FileBarChart, Users, LogOut, User as UserIcon } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -105,6 +105,12 @@ const Navbar = () => {
       href: '/reports',
       type: 'link'
     },
+     {
+          label: 'Classes',
+          icon: <BookIcon size={20} />,
+          href: '/classes',
+          type: 'link'
+        },
     {
       label: 'Profile',
       icon: <UserIcon size={20} />,

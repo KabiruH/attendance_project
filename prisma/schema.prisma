@@ -15,6 +15,7 @@ model Users {
   phone_number  String      @db.VarChar(20)
   department    String      @db.VarChar(20)
   gender        String      @db.VarChar(10)
+  email         String?       @unique @db.VarChar(100)
   is_active     Boolean     @default(true)
   created_at    DateTime    @default(now())
   updated_at    DateTime    @updatedAt
@@ -23,6 +24,8 @@ model Users {
   webAuthnCredentials WebAuthnCredentials[]
   LoginLogs     LoginLogs[] 
   webAuthnCredentialChallenge WebAuthnCredentialChallenge?
+  trainerClassAssignments TrainerClassAssignments[]
+  classAttendance         ClassAttendance[]
 
   @@map("Users")
   @@index([id_number])
@@ -88,6 +91,7 @@ model AttendanceProcessingLog {
 model WebAuthnCredentials {
   id              String   @id @default(uuid())
   userId          Int
+  email           String?  @db.VarChar(100)
   user            Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
   credentialId    String   @unique
   publicKey       String   @db.Text
@@ -136,4 +140,73 @@ model LoginLogs {
   @@index([attempted_at])
   @@index([status])
   @@index([ip_address])
+}
+
+// Classes that trainers can be assigned to
+model Classes {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)        // e.g., "Advanced Mathematics"
+  code            String    @unique @db.VarChar(20)  // e.g., "MATH301"
+  description     String?   @db.Text                 // Optional class description
+  department      String    @db.VarChar(50)          // Department offering the class
+  duration_hours  Int       @default(2)              // Class duration in hours
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  created_by      String    @db.VarChar(100)
+  
+  // Relations
+  trainerAssignments TrainerClassAssignments[]
+  classAttendance    ClassAttendance[]
+
+  @@map("Classes")
+  @@index([code])
+  @@index([department])
+  @@index([is_active])
+}
+
+// Separate attendance tracking for classes
+model ClassAttendance {
+  id                Int       @id @default(autoincrement())
+  trainer_id        Int       // References Users.id (employee who is a trainer)
+  class_id          Int       // References Classes.id
+  date              DateTime  @db.Date
+  check_in_time     DateTime
+  check_out_time    DateTime? // Will be auto-set after duration_hours
+  status            String    @default("Present") @db.VarChar(20)
+  auto_checkout     Boolean   @default(false)     // Flag to track if auto-checked out
+  work_attendance_id Int?     // Reference to the work attendance record (optional link)
+  created_at        DateTime  @default(now())
+  
+  // Relations
+  trainer           Users     @relation(fields: [trainer_id], references: [id], onDelete: Cascade)
+  class             Classes   @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  
+  @@unique([trainer_id, class_id, date])  // One check-in per trainer per class per day
+  @@map("ClassAttendance")
+  @@index([trainer_id])
+  @@index([class_id])
+  @@index([date])
+  @@index([check_in_time])
+  @@index([auto_checkout])
+}
+
+// Junction table to assign trainers to classes
+model TrainerClassAssignments {
+  id          Int       @id @default(autoincrement())
+  trainer_id  Int       // References Users.id (where role = 'employee' and assigned to classes)
+  class_id    Int       // References Classes.id
+  assigned_at DateTime  @default(now())
+  is_active   Boolean   @default(true)
+  assigned_by String    @db.VarChar(100)  // Who made the assignment
+  
+  // Relations
+  trainer     Users     @relation(fields: [trainer_id], references: [id], onDelete: Cascade)
+  class       Classes   @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  
+  @@unique([trainer_id, class_id])  // A trainer can only be assigned to a class once
+  @@map("TrainerClassAssignments")
+  @@index([trainer_id])
+  @@index([class_id])
+  @@index([is_active])
 }
