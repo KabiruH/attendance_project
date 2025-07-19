@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { jwtDecode } from "jwt-decode";
 import { useToast } from '@/components/ui/use-toast';
 import AdminDashboard from './adminDashboard';
-import EmployeeDashboard from './employeeDashboard';
+import { EmployeeDashboard } from '@/components/dashboard'
 
 interface DecodedToken {
   id: number;

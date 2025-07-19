@@ -1,11 +1,12 @@
 // globals.d.ts
-declare global {
-  var quickCheckInChallenges: Map<string, {
-    challenge: string;
-    timestamp: number;
-    expires: number;
-  }> | undefined;
+interface ChallengeData {
+  challenge: string;
+  expires: number;
+}
 
+declare global {
+  var quickCheckInChallenges: Map<string, ChallengeData> | undefined;
+  
   interface Window {
     tempAuthResult?: {
       credentialId: string;

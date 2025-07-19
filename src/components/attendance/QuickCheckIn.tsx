@@ -87,39 +87,75 @@ export default function QuickCheckIn({ onSuccess }: QuickCheckInProps) {
       throw new Error(authData.error || 'Failed to get authentication challenge');
     }
 
-    // Perform WebAuthn authentication
-    const credential = await navigator.credentials.get({
-      publicKey: {
-        challenge: new Uint8Array(authData.challenge),
-        allowCredentials: authData.allowCredentials.map((cred: any) => ({
-          id: new Uint8Array(cred.id),
-          type: 'public-key',
-          transports: cred.transports || ['internal']
-        })),
-        timeout: 60000,
-        userVerification: 'preferred'
-      }
+    console.log('WebAuthn challenge received:', {
+      challengeLength: authData.challenge.length,
+      allowCredentialsCount: authData.allowCredentials.length,
+      challengeId: authData.challengeId
     });
 
-    if (!credential) {
-      throw new Error('Biometric authentication was cancelled');
-    }
+    // Log credential details for debugging
+    authData.allowCredentials.forEach((cred: any, index: number) => {
+      console.log(`Credential ${index}:`, {
+        idLength: cred.id.length,
+        type: cred.type,
+        transports: cred.transports
+      });
+    });
 
-    // Store credential for later use
-    const publicKeyCredential = credential as PublicKeyCredential;
-    const response = publicKeyCredential.response as AuthenticatorAssertionResponse;
-    
-    // Store auth result for next steps
-    window.tempAuthResult = {
-      credentialId: publicKeyCredential.id,
-      response: {
-        authenticatorData: Array.from(new Uint8Array(response.authenticatorData)),
-        clientDataJSON: Array.from(new Uint8Array(response.clientDataJSON)),
-        signature: Array.from(new Uint8Array(response.signature)),
-        userHandle: response.userHandle ? Array.from(new Uint8Array(response.userHandle)) : null
-      },
-      challengeId: authData.challengeId
-    };
+    try {
+      // Perform WebAuthn authentication
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          challenge: new Uint8Array(authData.challenge),
+          allowCredentials: authData.allowCredentials.map((cred: any) => ({
+            id: new Uint8Array(cred.id),
+            type: 'public-key',
+            transports: cred.transports || ['internal']
+          })),
+          timeout: 60000,
+          userVerification: 'preferred',
+          rpId: authData.rpId // Use rpId from server if provided
+        }
+      });
+
+      if (!credential) {
+        throw new Error('Biometric authentication was cancelled');
+      }
+
+      console.log('WebAuthn authentication successful');
+
+      // Store credential for later use
+      const publicKeyCredential = credential as PublicKeyCredential;
+      const response = publicKeyCredential.response as AuthenticatorAssertionResponse;
+      
+      // Store auth result for next steps
+      window.tempAuthResult = {
+        credentialId: publicKeyCredential.id,
+        response: {
+          authenticatorData: Array.from(new Uint8Array(response.authenticatorData)),
+          clientDataJSON: Array.from(new Uint8Array(response.clientDataJSON)),
+          signature: Array.from(new Uint8Array(response.signature)),
+          userHandle: response.userHandle ? Array.from(new Uint8Array(response.userHandle)) : null
+        },
+        challengeId: authData.challengeId
+      };
+    } catch (webauthnError) {
+      console.error('WebAuthn error:', webauthnError);
+      
+      if (webauthnError instanceof Error) {
+        if (webauthnError.name === 'NotAllowedError') {
+          throw new Error('Biometric authentication was cancelled or not allowed');
+        } else if (webauthnError.name === 'InvalidStateError') {
+          throw new Error('No registered biometric credentials found. Please register your fingerprint first.');
+        } else if (webauthnError.name === 'NotSupportedError') {
+          throw new Error('Biometric authentication is not supported on this device');
+        } else {
+          throw new Error(`Authentication failed: ${webauthnError.message}`);
+        }
+      } else {
+        throw new Error('Biometric authentication failed');
+      }
+    }
   };
 
   const performLocationCheck = async () => {

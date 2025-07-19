@@ -1,28 +1,32 @@
-// app/api/auth/webauthn/quick-checkin/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/webauthn/quick-checkin/route.ts
+import { NextResponse } from 'next/server';
+import { generateAuthenticationOptions } from '@simplewebauthn/server';
+import type { AuthenticatorTransportFuture } from '@simplewebauthn/types';
 import { db } from '@/lib/db/db';
 import crypto from 'crypto';
 
-// POST /api/auth/webauthn/quick-checkin - Initiate WebAuthn authentication for quick check-in
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    // Generate a random challenge
-    const challenge = crypto.randomBytes(32);
-    const challengeId = crypto.randomUUID();
+    console.log('Quick check-in endpoint called');
 
-    // Get all WebAuthn credentials for potential authentication
+    // Determine RP ID based on environment
+    const host = req.headers.get('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    const rpID = isLocalhost ? 'localhost' : (process.env.WEBAUTHN_RP_ID || 'localhost');
+    
+    console.log(`Using RP ID: ${rpID}`);
+
+    // Get all registered credentials for active users
     const credentials = await db.webAuthnCredentials.findMany({
       where: {
         user: {
           is_active: true
         }
       },
-      select: {
-        credentialId: true,
-        transports: true,
-        userId: true,
+      include: {
         user: {
           select: {
+            id: true,
             name: true,
             role: true,
             department: true
@@ -31,51 +35,96 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    console.log(`Found ${credentials.length} registered credentials`);
+
     if (credentials.length === 0) {
       return NextResponse.json(
-        { error: 'No registered biometric credentials found' },
+        { error: 'No registered credentials found for any active users' },
         { status: 400 }
       );
     }
 
-    // Store the challenge temporarily in memory (in production, use Redis)
-    global.quickCheckInChallenges = global.quickCheckInChallenges || new Map();
-    global.quickCheckInChallenges.set(challengeId, {
-      challenge: challenge.toString('base64'),
-      timestamp: Date.now(),
-      expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+    // Map credentials to the format expected by generateAuthenticationOptions
+    const allowCredentials = credentials.map((cred) => {
+      const credential: {
+        id: string;
+        type: 'public-key';
+        transports?: AuthenticatorTransportFuture[];
+      } = {
+        id: cred.credentialId, // Keep as base64url string
+        type: 'public-key',
+      };
+
+      // Parse transports correctly (fix the double-JSON encoding issue)
+      if (cred.transports) {
+        try {
+          // Handle potential double-JSON encoding
+          let parsedTransports: any = cred.transports;
+          if (typeof parsedTransports === 'string') {
+            parsedTransports = JSON.parse(parsedTransports);
+          }
+          if (typeof parsedTransports === 'string') {
+            parsedTransports = JSON.parse(parsedTransports);
+          }
+          credential.transports = parsedTransports as AuthenticatorTransportFuture[];
+        } catch (e) {
+          console.warn(`Could not parse transports for credential ${cred.id}:`, e);
+          // Default to common transports if parsing fails
+          credential.transports = ['internal'];
+        }
+      } else {
+        // Default transports if none stored
+        credential.transports = ['internal'];
+      }
+
+      console.log(`Credential ${cred.credentialId.substring(0, 12)}... has transports:`, credential.transports);
+      return credential;
     });
 
-    // Clean up old challenges
-    const now = Date.now();
-    for (const [id, data] of global.quickCheckInChallenges.entries()) {
-      if (data.expires < now) {
-        global.quickCheckInChallenges.delete(id);
-      }
-    }
-
-    // Format credentials for WebAuthn
-    const allowCredentials = credentials.map(cred => ({
-      id: Array.from(Buffer.from(cred.credentialId, 'base64')),
-      type: 'public-key',
-      transports: cred.transports ? cred.transports.split(',') : ['internal']
-    }));
-
-    console.log(`Generated challenge for quick check-in: ${challengeId}`);
-    console.log(`Found ${credentials.length} registered credentials`);
-
-    return NextResponse.json({
-      challenge: Array.from(challenge),
+    // Generate authentication options using SimpleWebAuthn
+    const options = await generateAuthenticationOptions({
+      rpID,
       allowCredentials,
-      challengeId,
+      userVerification: 'preferred',
       timeout: 60000,
-      userVerification: 'preferred'
+    });
+
+    // Generate a unique challenge ID for tracking
+    const challengeId = crypto.randomUUID();
+    console.log(`Generated challenge ID: ${challengeId}`);
+
+    // Store the challenge in global memory (matching your existing pattern)
+    if (!global.quickCheckInChallenges) {
+      global.quickCheckInChallenges = new Map();
+    }
+    
+    global.quickCheckInChallenges.set(challengeId, {
+      challenge: options.challenge,
+      expires: Date.now() + 5 * 60 * 1000, // 5 minutes
+    });
+
+    console.log('Formatted allowCredentials:', allowCredentials.map(cred => ({
+      idLength: cred.id.length,
+      type: cred.type,
+      transports: cred.transports
+    })));
+
+    console.log('Returning WebAuthn challenge data');
+
+    // Return the authentication options with challenge ID
+    return NextResponse.json({
+      ...options,
+      challengeId,
+      rpId: rpID // Explicitly include rpId for frontend
     });
 
   } catch (error) {
-    console.error('WebAuthn quick check-in initiation error:', error);
+    console.error('Error in quick check-in:', error);
     return NextResponse.json(
-      { error: 'Failed to initiate authentication' },
+      { 
+        error: 'Failed to generate authentication challenge',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
