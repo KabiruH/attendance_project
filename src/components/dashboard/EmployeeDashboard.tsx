@@ -1,6 +1,6 @@
 // components/dashboard/EmployeeDashboard.tsx
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useClassAttendance } from '@/hooks/useClassAttendance';
 import WelcomeHeader from './WelcomeHeader';
@@ -8,6 +8,10 @@ import AttendanceCard from './AttendanceCard';
 import StatisticsCards from './StatisticsCards';
 import AttendanceCharts from './AttendanceCharts';
 import ClassStatusCard from './ClassStatusCard';
+import ClassAnalyticsCards from './ClassAnalyticsCards';
+import ClassAnalyticsDashboard from './ClassAnalyticsCards';
+import { Button } from "@/components/ui/button";
+import { TrendingUp, BarChart3 } from 'lucide-react';
 
 interface EmployeeDashboardProps {
   data?: {
@@ -19,6 +23,8 @@ interface EmployeeDashboardProps {
 }
 
 const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
+  const [showFullAnalytics, setShowFullAnalytics] = useState(false);
+  
   const {
     isCheckedIn,
     isLoading,
@@ -46,6 +52,27 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
 
   const handleCheckIn = () => handleAttendance('check-in');
   const handleCheckOut = () => handleAttendance('check-out');
+
+  // Check if user is a trainer (adjust role check based on your schema)
+  const isTrainer = userRole === 'trainer' || userRole === 'employee' || data?.role === 'trainer' || data?.role === 'employee';
+
+  // Toggle between compact and full analytics view
+  if (showFullAnalytics) {
+    return (
+      <div className="min-h-screen bg-slate-100 p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Class Training Analytics</h1>
+          <Button
+            variant="outline"
+            onClick={() => setShowFullAnalytics(false)}
+          >
+            Back to Dashboard
+          </Button>
+        </div>
+        <ClassAnalyticsDashboard />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 space-y-6">
@@ -83,6 +110,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
       
       {/* Statistics Cards */}
       <StatisticsCards stats={stats} />
+
+      {/* Class Analytics - Only show for trainers */}
+      {isTrainer && (
+        <ClassAnalyticsCards
+          userId={employee_id}
+          onViewFullAnalytics={() => setShowFullAnalytics(true)}
+        />
+      )}
       
       {/* Charts section */}
       <AttendanceCharts
