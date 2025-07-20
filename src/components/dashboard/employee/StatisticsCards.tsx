@@ -4,7 +4,7 @@
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { UserCheck, UserX, AlertTriangle, Timer } from 'lucide-react';
-import { AttendanceStats } from '../../lib/types/dashboard';
+import { AttendanceStats } from '../../../lib/types/dashboard';
 
 interface StatisticsCardsProps {
   stats: AttendanceStats;

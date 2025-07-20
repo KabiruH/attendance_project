@@ -72,7 +72,11 @@ const AdminClassAnalytics: React.FC = () => {
   const [timeRange, setTimeRange] = useState('week');
 
   const fetchClassAnalytics = async () => {
-    setIsLoading(true);
+    // Only show loading for initial load, not for interval refreshes
+    if (classUtilization.length === 0) {
+      setIsLoading(true);
+    }
+    
     try {
       // Fetch class overview data
       const overviewResponse = await fetch('/api/admin/class-overview', {
@@ -104,6 +108,22 @@ const AdminClassAnalytics: React.FC = () => {
 
   useEffect(() => {
     fetchClassAnalytics();
+    
+    // Only set up interval refresh, don't refresh on every timeRange change
+    // Manual refresh when timeRange changes is sufficient
+    const interval = setInterval(fetchClassAnalytics, 600000); // 10 minutes
+    return () => clearInterval(interval);
+  }, []); // Remove timeRange dependency
+
+  // Separate effect for timeRange changes with debounce
+  useEffect(() => {
+    if (timeRange) {
+      const timeoutId = setTimeout(() => {
+        fetchClassAnalytics();
+      }, 300); // 300ms debounce
+      
+      return () => clearTimeout(timeoutId);
+    }
   }, [timeRange]);
 
   if (isLoading) {

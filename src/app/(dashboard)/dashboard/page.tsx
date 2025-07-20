@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { jwtDecode } from "jwt-decode";
 import { useToast } from '@/components/ui/use-toast';
-import AdminDashboard from './adminDashboard';
-import { EmployeeDashboard } from '@/components/dashboard'
+import AdminDashboard from '@/components/dashboard/AdminDashboard';
+import EmployeeDashboard  from '@/components/dashboard/EmployeeDashboard'
 
 interface DecodedToken {
   id: number;

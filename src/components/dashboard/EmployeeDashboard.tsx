@@ -3,15 +3,14 @@
 import React, { useState } from 'react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useClassAttendance } from '@/hooks/useClassAttendance';
-import WelcomeHeader from './WelcomeHeader';
-import AttendanceCard from './AttendanceCard';
-import StatisticsCards from './StatisticsCards';
-import AttendanceCharts from './AttendanceCharts';
-import ClassStatusCard from './ClassStatusCard';
-import ClassAnalyticsCards from './ClassAnalyticsCards';
-import ClassAnalyticsDashboard from './ClassAnalyticsCards';
+import WelcomeHeader from './employee/WelcomeHeader';
+import AttendanceCard from './employee/AttendanceCard';
+import StatisticsCards from './employee/StatisticsCards';
+import AttendanceCharts from './employee/AttendanceCharts';
+import ClassStatusCard from './employee/ClassStatusCard';
+import ClassAnalyticsCards from './employee/ClassAnalyticsCards';
+import ClassAnalyticsDashboard from './employee/ClassAnalyticsCards';
 import { Button } from "@/components/ui/button";
-import { TrendingUp, BarChart3 } from 'lucide-react';
 
 interface EmployeeDashboardProps {
   data?: {
@@ -54,7 +53,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
   const handleCheckOut = () => handleAttendance('check-out');
 
   // Check if user is a trainer (adjust role check based on your schema)
-  const isTrainer = userRole === 'trainer' || userRole === 'employee' || data?.role === 'trainer' || data?.role === 'employee';
+  const isTrainer =  userRole === 'employee' || data?.role === 'trainer' || data?.role === 'employee';
 
   // Toggle between compact and full analytics view
   if (showFullAnalytics) {

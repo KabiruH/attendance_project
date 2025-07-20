@@ -4,7 +4,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, LineChart, XAxis, YAxis, Bar, Line, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ChartDataPoint, WeeklyHoursDataPoint } from '../../lib/types/dashboard';
+import { ChartDataPoint, WeeklyHoursDataPoint } from '../../../lib/types/dashboard';
 
 interface AttendanceChartsProps {
   attendanceData: ChartDataPoint[];
