@@ -91,7 +91,7 @@ const AdminSummaryCards: React.FC = () => {
     fetchMetrics();
     
     // Refresh every 2 minutes
-    const interval = setInterval(fetchMetrics, 120000);
+    const interval = setInterval(fetchMetrics, 600000);
     return () => clearInterval(interval);
   }, []);
 

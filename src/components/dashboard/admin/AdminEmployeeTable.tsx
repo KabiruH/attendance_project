@@ -100,23 +100,6 @@ const AdminEmployeeTable: React.FC = () => {
     });
   };
 
-  const calculateTotalHoursFromSessions = (sessions: AttendanceSession[]): number => {
-    if (!sessions || sessions.length === 0) return 0;
-    
-    let totalMinutes = 0;
-    sessions.forEach(session => {
-      if (session.check_in) {
-        const checkIn = new Date(session.check_in);
-        const checkOut = session.check_out ? new Date(session.check_out) : new Date();
-        const diffInMs = checkOut.getTime() - checkIn.getTime();
-        const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
-        totalMinutes += diffInMinutes;
-      }
-    });
-    
-    return totalMinutes / 60;
-  };
-
   const hasActiveSession = (attendance: AttendanceRecord): boolean => {
     if (attendance.sessions && Array.isArray(attendance.sessions)) {
       return attendance.sessions.some((s: AttendanceSession) => s.check_in && !s.check_out);

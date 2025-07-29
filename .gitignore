@@ -43,3 +43,9 @@ next-env.d.ts
 # .gitignore
 public/uploads/*
 !public/uploads/.gitkeep
+
+# amplify
+node_modules
+.amplify
+amplify_outputs*
+amplifyconfiguration*

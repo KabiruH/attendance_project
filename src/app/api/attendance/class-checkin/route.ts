@@ -1,32 +1,134 @@
 // app/api/attendance/class-checkin/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { DateTime } from 'luxon';
+import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { db } from '@/lib/db/db';
 import jwt from 'jsonwebtoken';
 
 // Helper function to verify JWT and get user
-async function getAuthenticatedUser(req: NextRequest) {
+async function getAuthenticatedUser(req: NextRequest, body?: any) {
+  // Try JWT first
   const token = req.cookies.get('token')?.value;
   
-  if (!token) {
-    throw new Error('No authentication token found');
-  }
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
+      const user = await db.users.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, name: true, role: true, is_active: true }
+      });
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
-    const user = await db.users.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, name: true, role: true, is_active: true }
-    });
+      if (!user || !user.is_active) {
+        throw new Error('User not found or inactive');
+      }
 
-    if (!user || !user.is_active) {
-      throw new Error('User not found or inactive');
+      return user;
+    } catch (error) {
+      // JWT failed, try biometric if available
     }
-
-    return user;
-  } catch (error) {
-    throw new Error('Invalid authentication token');
   }
+
+  // Try biometric authentication for class check-in
+  if (body?.username && body?.authenticationResponse) {
+    const biometricUser = await verifyBiometricAuth(body.username, body.authenticationResponse, req);
+    return {
+      id: biometricUser.user_id,
+      name: biometricUser.name,
+      role: biometricUser.role,
+      is_active: true
+    };
+  }
+
+  throw new Error('No valid authentication method provided');
+}
+
+// Verify biometric authentication (same as attendance route)
+async function verifyBiometricAuth(username: string, authenticationResponse: any, request: NextRequest) {
+  // Find the user
+  const user = await db.users.findUnique({
+    where: { id_number: username },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  // Get the expected challenge
+  const challengeRecord = await db.webAuthnCredentialChallenge.findUnique({
+    where: { userId: user.id },
+  });
+
+  if (!challengeRecord || new Date() > challengeRecord.expires) {
+    throw new Error('Challenge not found or expired');
+  }
+
+  // Get the credential being used
+  const credentialId = authenticationResponse.id;
+  const credential = await db.webAuthnCredentials.findFirst({
+    where: { credentialId },
+  });
+
+  if (!credential || credential.userId !== user.id) {
+    throw new Error('Credential not found or does not belong to user');
+  }
+
+  // Determine origin and RP ID based on environment
+  const host = request.headers.get('host') || '';
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+
+  const expectedOrigin = isLocalhost
+    ? 'http://localhost:3000'
+    : (process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000');
+
+  const expectedRPID = isLocalhost
+    ? 'localhost'
+    : (process.env.WEBAUTHN_RP_ID || 'localhost');
+
+  // Verify the authentication response
+  const verification = await verifyAuthenticationResponse({
+    response: authenticationResponse,
+    expectedChallenge: challengeRecord.challenge,
+    expectedOrigin,
+    expectedRPID,
+    requireUserVerification: false,
+    credential: {
+      id: credential.credentialId,
+      publicKey: new Uint8Array(Buffer.from(credential.publicKey, 'base64url')),
+      counter: credential.counter,
+    },
+  });
+
+  if (!verification.verified) {
+    throw new Error('Biometric verification failed');
+  }
+
+  // Update counter
+  await db.webAuthnCredentials.update({
+    where: { id: credential.id },
+    data: { counter: verification.authenticationInfo.newCounter },
+  });
+
+  // Clean up the challenge
+  await db.webAuthnCredentialChallenge.delete({
+    where: { userId: user.id },
+  });
+
+  // Get employee info
+  const employee = await db.employees.findUnique({
+    where: { employee_id: user.id },
+  });
+
+  if (!employee) {
+    throw new Error('Employee not found');
+  }
+
+  return {
+    user_id: user.id,
+    employee_id: employee.id,
+    name: employee.name,
+    email: employee.email,
+    role: user.role
+  };
 }
 
 // GET /api/attendance/class-checkin - Get assigned classes and today's attendance
@@ -91,8 +193,13 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching assigned classes:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
+      { 
+        success: false, 
+        assignments: [], 
+        todayAttendance: [], 
+        error: error instanceof Error ? error.message : 'Internal server error' 
+      },
+      { status: 200 } // Return 200 so component doesn't error
     );
   }
 }
@@ -100,8 +207,9 @@ export async function GET(request: NextRequest) {
 // POST /api/attendance/class-checkin - Handle class check-in for trainers
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    const { class_id, action } = await request.json();
+    const body = await request.json();
+    const user = await getAuthenticatedUser(request, body);
+    const { class_id, action, username, authenticationResponse } = body;
 
     // Support both old format (class_id, trainer_id) and new format (class_id, action)
     const trainer_id = user.id;
@@ -280,8 +388,9 @@ export async function POST(request: NextRequest) {
 // PATCH /api/attendance/class-checkin - Handle manual check-out (optional override of auto-checkout)
 export async function PATCH(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    const { attendance_id, action } = await request.json();
+    const body = await request.json();
+    const user = await getAuthenticatedUser(request, body);
+    const { attendance_id, action } = body;
 
     if (action !== 'check-out') {
       return NextResponse.json(

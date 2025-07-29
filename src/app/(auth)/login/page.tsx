@@ -1,17 +1,17 @@
 'use client';
 import { useState } from 'react';
 import LoginForm from '@/components/auth/LoginForm';
-import QuickCheckIn from '@/components/attendance/QuickCheckIn';
-import { Building2, Clock, Users, ArrowRight } from 'lucide-react';
+import BiometricCheckin from '@/components/attendance/BiometricCheckin';
+import { Building2, Clock, Users, ArrowRight, Fingerprint, Shield } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function LoginPage() {
   const [showLoginForm, setShowLoginForm] = useState(false);
 
-  const handleQuickCheckInSuccess = () => {
+  const handleBiometricSuccess = () => {
     // Optionally refresh the page or show additional success UI
-    console.log('Quick check-in successful!');
+    console.log('Biometric check-in successful!');
   };
 
   return (
@@ -24,14 +24,22 @@ export default function LoginPage() {
             Welcome to our Attendance System
           </h1>
           <p className="text-blue-100 text-2xl mb-12">
-            Streamline your attendance tracking with our modern, user-friendly platform.
+            Streamline your attendance tracking with our modern, biometric-enabled platform.
           </p>
          
-          {/* Feature List */}
+          {/* Updated Feature List */}
           <div className="space-y-6">
             <div className="flex items-center space-x-4">
+              <Fingerprint className="w-9 h-9 text-blue-200" />
+              <p className="text-white text-xl">Biometric authentication</p>
+            </div>
+            <div className="flex items-center space-x-4">
               <Clock className="w-9 h-9 text-blue-200" />
-              <p className="text-white text-xl">Easy check-in and check-out</p>
+              <p className="text-white text-xl">Instant work & class check-in</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Shield className="w-9 h-9 text-blue-200" />
+              <p className="text-white text-xl">Location-verified attendance</p>
             </div>
             <div className="flex items-center space-x-4">
               <Users className="w-9 h-9 text-blue-200" />
@@ -52,24 +60,31 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right side - Quick Check-In or Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-md space-y-8">
+      {/* Right side - Biometric Check-In or Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 lg:p-8">
+        <div className="w-full max-w-2xl">
           
           {!showLoginForm ? (
-            // Quick Check-In View
+            // Biometric Check-In View
             <div className="space-y-6">
               <div className="text-center">
+                <div className="flex items-center justify-center mb-4">
+                  <div className="p-3 bg-blue-100 rounded-full">
+                    <Fingerprint className="w-8 h-8 text-blue-600" />
+                  </div>
+                </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Quick Attendance
+                  Biometric Attendance
                 </h2>
                 <p className="text-gray-600">
-                  Check in to work instantly with your biometric authentication
+                  Use your fingerprint or Face ID for instant, secure check-in
                 </p>
               </div>
 
-              {/* Quick Check-In Component */}
-              <QuickCheckIn onSuccess={handleQuickCheckInSuccess} />
+              {/* Biometric Check-In Component */}
+              <div className="bg-white rounded-lg">
+                <BiometricCheckin />
+              </div>
 
               {/* Divider */}
               <div className="relative">
@@ -82,11 +97,11 @@ export default function LoginPage() {
               </div>
 
               {/* Full Login Option */}
-              <Card className="border-gray-200">
+              <Card className="border-gray-200 bg-white">
                 <CardContent className="pt-6">
                   <div className="text-center space-y-4">
                     <div>
-                      <h3 className="font-medium text-gray-900">Need Full Access?</h3>
+                      <h3 className="font-medium text-gray-900">Need Dashboard Access?</h3>
                       <p className="text-sm text-gray-600">
                         Access your dashboard, reports, and account settings
                       </p>
@@ -115,16 +130,18 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <LoginForm />
+              <div className="bg-white rounded-lg p-6">
+                <LoginForm />
+              </div>
 
-              {/* Back to Quick Check-In */}
+              {/* Back to Biometric Check-In */}
               <div className="text-center">
                 <Button
                   onClick={() => setShowLoginForm(false)}
                   variant="ghost"
                   className="text-blue-600 hover:text-blue-700"
                 >
-                  ← Back to Quick Check-In
+                  ← Back to Biometric Check-In
                 </Button>
               </div>
             </div>

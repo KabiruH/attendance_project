@@ -13,7 +13,7 @@ model Users {
   id_number     String      @unique @db.VarChar(50)
   role          String      @db.VarChar(20)
   phone_number  String      @db.VarChar(20)
-  department    String      @db.VarChar(20)
+  department    String?      @db.VarChar(20)
   gender        String      @db.VarChar(10)
   email         String?       @unique @db.VarChar(100)
   is_active     Boolean     @default(true)
@@ -26,6 +26,8 @@ model Users {
   webAuthnCredentialChallenge WebAuthnCredentialChallenge?
   trainerClassAssignments TrainerClassAssignments[]
   classAttendance         ClassAttendance[]
+  biometricEnrollments    BiometricEnrollments[]
+  biometricLogs           BiometricLogs[]
 
   @@map("Users")
   @@index([id_number])
@@ -209,4 +211,45 @@ model TrainerClassAssignments {
   @@index([trainer_id])
   @@index([class_id])
   @@index([is_active])
+}
+
+// Biometric enrollment tracking for mobile app
+model BiometricEnrollments {
+  id              Int       @id @default(autoincrement())
+  user_id         Int       // References Users.id
+  biometric_hash  String    @db.Text  // Hashed biometric data (for security)
+  enrolled_at     DateTime  @default(now())
+  device_info     Json?     // Store device information
+  ip_address      String?   @db.VarChar(45)
+  user_agent      String?   @db.Text
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  
+  // Relations
+  user            Users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@map("BiometricEnrollments")
+  @@index([user_id])
+  @@index([user_id, is_active])
+}
+
+// Biometric activity logs for security tracking
+model BiometricLogs {
+  id          Int       @id @default(autoincrement())
+  user_id     Int       // References Users.id
+  action      String    @db.VarChar(50)  // 'enrollment', 'authentication', 'deletion'
+  status      String    @db.VarChar(20)  // 'success', 'failed'
+  ip_address  String?   @db.VarChar(45)
+  user_agent  String?   @db.Text
+  timestamp   DateTime  @default(now())
+  details     Json?     // Additional details about the action
+  
+  // Relations
+  user        Users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+    @@map("BiometricLogs")
+  @@index([user_id])
+  @@index([timestamp])
+  @@index([action])
+  @@index([status])
 }
