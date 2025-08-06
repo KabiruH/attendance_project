@@ -9,11 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function LoginPage() {
   const [showLoginForm, setShowLoginForm] = useState(false);
 
-  const handleBiometricSuccess = () => {
-    // Optionally refresh the page or show additional success UI
-    console.log('Biometric check-in successful!');
-  };
-
   return (
     <div className="min-h-screen flex">
       {/* Left side - Hero Section */}

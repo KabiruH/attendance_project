@@ -7,14 +7,16 @@ interface Coordinates {
 
 // Center point of the allowed area 
 const CENTER_COORDINATES: Coordinates = {
-  latitude: -1.22486,  // Replace with your actual center latitude
-  longitude: 36.70958, // Replace with your actual center longitude
+  // latitude: -0.8317087,  // Your actual center latitude
+  // longitude: 37.00492, // Replace with your actual center longitude
+  latitude: -0.0236,
+  longitude: 37.9062,
   // latitude: -1.3022715,  
   // longitude: 36.7505527, 
   
 };
-
-const MAX_DISTANCE_METERS = 50; // 50m radius
+// const MAX_DISTANCE_METERS = 50; // 50m radius
+const MAX_DISTANCE_METERS = 600_000; // 50m radius
 
 // Haversine formula to calculate distance between two points in meters
 function getDistanceInMeters(

@@ -1,5 +1,27 @@
 import { db } from "../db/db";
 
+// Interface for attendance session
+interface AttendanceSession {
+  [key: string]: any;
+  check_in_time?: string;
+  check_out_time?: string;
+  type: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    timestamp: number;
+  };
+  ip_address?: string;
+  user_agent?: string;
+  auto_checkout?: boolean;
+}
+
+const ATTENDANCE_RULES = {
+  AUTO_CHECKOUT: 17,       // 5 PM - automatic checkout time
+  CLASS_DURATION_HOURS: 2, // 2 hours - automatic class checkout after this duration
+};
+
 export async function processAbsentRecords(date: Date = new Date()) {
   const currentDate = date.toISOString().split('T')[0];
   const currentTime = date.getHours();
@@ -125,6 +147,88 @@ export async function processMissedDays() {
   }
 }
 
+// NEW: Process class attendance auto-checkouts
+export async function processClassAutoCheckouts(currentTime: Date) {
+  try {
+    const todayDate = new Date(currentTime.toISOString().split('T')[0]);
+    
+    // Find all active class sessions
+    const activeClassSessions = await db.classAttendance.findMany({
+      where: {
+        date: todayDate,
+        check_out_time: null
+      }
+    });
+
+    let classCheckoutCount = 0;
+
+    for (const session of activeClassSessions) {
+      if (session.check_in_time) {
+        const timeDiff = currentTime.getTime() - session.check_in_time.getTime();
+        const hoursDiff = timeDiff / (1000 * 60 * 60);
+        
+        // Auto-checkout after 2 hours
+        if (hoursDiff >= ATTENDANCE_RULES.CLASS_DURATION_HOURS) {
+          await db.classAttendance.update({
+            where: { id: session.id },
+            data: {
+              check_out_time: currentTime,
+              auto_checkout: true
+            }
+          });
+          classCheckoutCount++;
+          
+          console.log(`Auto-checked out class session for trainer ${session.trainer_id}, class ${session.class_id}`);
+        }
+      }
+    }
+
+    return classCheckoutCount;
+  } catch (error) {
+    console.error('Failed to process class auto-checkouts:', error);
+    return 0;
+  }
+}
+
+// ENHANCED: Add session tracking for work checkouts
+async function performWorkAutoCheckout(record: any, checkoutTime: Date) {
+  let existingSessions: AttendanceSession[] = [];
+  
+  if (record.sessions) {
+    try {
+      const sessionData = record.sessions as unknown;
+      
+      if (Array.isArray(sessionData)) {
+        existingSessions = sessionData as AttendanceSession[];
+      } else if (typeof sessionData === 'string') {
+        existingSessions = JSON.parse(sessionData) as AttendanceSession[];
+      }
+    } catch (parseError) {
+      console.error('Error parsing existing sessions:', parseError);
+      existingSessions = [];
+    }
+  }
+
+  const autoCheckoutSession: AttendanceSession = {
+    check_out_time: checkoutTime.toISOString(),
+    type: 'work_auto_checkout',
+    auto_checkout: true,
+    ip_address: 'system',
+    user_agent: 'Auto Checkout System'
+  };
+
+  const updatedSessions = [...existingSessions, autoCheckoutSession];
+  const sessionsJson = JSON.parse(JSON.stringify(updatedSessions));
+
+  await db.attendance.update({
+    where: { id: record.id },
+    data: { 
+      check_out_time: checkoutTime,
+      sessions: sessionsJson
+    }
+  });
+}
+
 export async function processAutomaticAttendance() {
   const currentTime = new Date();
   const currentDate = new Date().toISOString().split('T')[0];
@@ -133,9 +237,12 @@ export async function processAutomaticAttendance() {
       // First, check and process any missed days
       const missedRecordsCount = await processMissedDays();
 
-      // Only proceed with today's processing if it's 5 PM or later
+      // Process class auto-checkouts (can happen anytime after 2 hours)
+      const classCheckoutCount = await processClassAutoCheckouts(currentTime);
+
+      // Only proceed with work processing if it's 5 PM or later
       if (currentTime.getHours() >= 17) {
-          // 1. Process auto-checkouts
+          // 1. Process work auto-checkouts
           const pendingCheckouts = await db.attendance.findMany({
               where: {
                   date: new Date(currentDate),
@@ -146,38 +253,35 @@ export async function processAutomaticAttendance() {
               },
           });
 
-          const checkoutTime = new Date(currentDate + 'T17:00:00'); // Remove the second setHours
+          const checkoutTime = new Date(currentDate + 'T17:00:00');
 
-          if (pendingCheckouts.length > 0) {
-              await Promise.all(
-                  pendingCheckouts.map(record =>
-                      db.attendance.update({
-                          where: { id: record.id },
-                          data: { check_out_time: checkoutTime }
-                      })
-                  )
-              );
+          // Process each work checkout with session tracking
+          for (const record of pendingCheckouts) {
+            await performWorkAutoCheckout(record, checkoutTime);
           }
 
           // 2. Process absent records after checkout time
           const absentCount = await processAbsentRecords(currentTime);
 
           return {
-              autoCheckouts: pendingCheckouts.length,
+              workCheckouts: pendingCheckouts.length,
+              classCheckouts: classCheckoutCount,
               absentRecords: absentCount,
               missedDaysProcessed: missedRecordsCount
           };
       }
    
       return {
-          autoCheckouts: 0,
+          workCheckouts: 0,
+          classCheckouts: classCheckoutCount,
           absentRecords: 0,
           missedDaysProcessed: missedRecordsCount
       };
   } catch (error) {
       console.error('Auto-attendance error:', error);
       return {
-          autoCheckouts: 0,
+          workCheckouts: 0,
+          classCheckouts: 0,
           absentRecords: 0,
           missedDaysProcessed: 0
       };
@@ -188,8 +292,12 @@ export async function ensureCheckouts() {
   try {
     const currentDate = new Date().toISOString().split('T')[0];
     const currentHour = new Date().getHours();
+    const currentTime = new Date();
 
-    // Find all records from today that haven't been checked out
+    // Process class checkouts (any time)
+    await processClassAutoCheckouts(currentTime);
+
+    // Find all work records from today that haven't been checked out
     // and where it's past 5 PM
     if (currentHour >= 17) {
       const pendingCheckouts = await db.attendance.findMany({
@@ -205,16 +313,10 @@ export async function ensureCheckouts() {
       if (pendingCheckouts.length > 0) {
         const checkoutTime = new Date(currentDate + 'T17:00:00');
         
-        await db.attendance.updateMany({
-          where: {
-            id: {
-              in: pendingCheckouts.map(record => record.id)
-            }
-          },
-          data: {
-            check_out_time: checkoutTime
-          }
-        });
+        // Process each checkout with session tracking
+        for (const record of pendingCheckouts) {
+          await performWorkAutoCheckout(record, checkoutTime);
+        }
       }
     }
 
@@ -234,19 +336,34 @@ export async function ensureCheckouts() {
         },
       });
 
+      const yesterdayCheckoutTime = new Date(yesterdayDate + 'T17:00:00');
       if (pendingYesterdayCheckouts.length > 0) {
-        const yesterdayCheckoutTime = new Date(yesterdayDate + 'T17:00:00');
         
-        await db.attendance.updateMany({
-          where: {
-            id: {
-              in: pendingYesterdayCheckouts.map(record => record.id)
+        // Process each checkout with session tracking
+        for (const record of pendingYesterdayCheckouts) {
+          await performWorkAutoCheckout(record, yesterdayCheckoutTime);
+        }
+      }
+
+      // Also check yesterday's class sessions
+      const yesterdayClassSessions = await db.classAttendance.findMany({
+        where: {
+          date: new Date(yesterdayDate),
+          check_out_time: null
+        }
+      });
+
+      for (const session of yesterdayClassSessions) {
+        if (session.check_in_time) {
+          // Force checkout for any unclosed sessions from yesterday
+          await db.classAttendance.update({
+            where: { id: session.id },
+            data: {
+              check_out_time: yesterdayCheckoutTime,
+              auto_checkout: true
             }
-          },
-          data: {
-            check_out_time: yesterdayCheckoutTime
-          }
-        });
+          });
+        }
       }
     }
 

@@ -23,12 +23,10 @@ export default function LoginForm() {
     if (typeof window !== 'undefined') {
       try {
         if (window.PublicKeyCredential) {
-          console.log('WebAuthn is supported in this browser');
           setBiometricSupported(true);
 
           // Check if we're in a secure context
           if (window.isSecureContext) {
-            console.log('Running in a secure context');
           } else {
             console.warn('NOT running in a secure context - WebAuthn may not work');
           }
@@ -195,14 +193,7 @@ const handleBiometricLogin = async () => {
     }
     
     const options = await optionsResponse.json();
-    console.log('Received authentication options:', {
-      challenge: options.challenge ? options.challenge.substring(0, 10) + '...' : 'MISSING',
-      rpId: options.rpId || 'NOT SET',
-      allowCredentials: options.allowCredentials?.length || 0,
-      timeout: options.timeout || 'default',
-      userVerification: options.userVerification || 'default'
-    });
-    
+     
     // Make sure allowCredentials is properly formatted
     if (!options.allowCredentials || !Array.isArray(options.allowCredentials) || options.allowCredentials.length === 0) {
       console.error('Invalid allowCredentials in options:', options.allowCredentials);
@@ -214,20 +205,11 @@ const handleBiometricLogin = async () => {
       options.timeout = 60000; // 1 minute
     }
 
-    console.log('=== CLEAN TEST - CLIENT DEBUG ===');
-    console.log('Domain:', window.location.hostname);
-    console.log('Origin:', window.location.origin);
-    console.log('Protocol:', window.location.protocol);
-    console.log('Options received:', options);
-    console.log('allowCredentials count:', options.allowCredentials?.length);
-    console.log('allowCredentials details:', options.allowCredentials);
 
     // 2. Call WebAuthn
     const authenticationResponse = await startAuthentication({
       optionsJSON: options
     });
-
-    console.log('✅ WEBAUTHN SUCCESS! Response ID:', authenticationResponse.id);
     
     // 3. Send the response to the server for verification
     const verificationResponse = await fetch('/api/webauthn/verify-authentication', {
