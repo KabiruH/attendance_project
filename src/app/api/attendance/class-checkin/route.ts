@@ -1,7 +1,6 @@
-// app/api/attendance/class-checkin/route.ts - Unified for web and mobile
+// app/api/attendance/class-checkin/route.ts - Cleaned version without WebAuthn
 import { NextRequest, NextResponse } from 'next/server';
 import { DateTime } from 'luxon';
-import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { db } from '@/lib/db/db';
 import { verifyMobileJWT } from '@/lib/auth/mobile-jwt';
 import jwt from 'jsonwebtoken';
@@ -31,22 +30,22 @@ const mobileClassAttendanceSchema = z.object({
 
 // Geofence configuration
 const GEOFENCE = {
-  latitude: -1.22486,
-  longitude: 36.70958,
-  radius: 50, // meters
+  latitude: -0.0236,
+  longitude: 37.9062,
+  radius: 600_000, // meters - matching your work attendance
 };
 
 const CLASS_RULES = {
   CLASS_DURATION_HOURS: 2, // 2 hours - automatic class checkout after this duration
 };
 
-// Enhanced authentication supporting JWT, biometric, and mobile JWT
-async function getAuthenticatedUser(req: NextRequest, body?: any): Promise<{ 
+// Simplified authentication supporting JWT and mobile JWT only
+async function getAuthenticatedUser(req: NextRequest): Promise<{ 
   id: number; 
   name: string; 
   role: string; 
   is_active: boolean;
-  authMethod: 'jwt' | 'biometric' | 'mobile_jwt';
+  authMethod: 'jwt' | 'mobile_jwt';
 }> {
   // Try JWT first (web app)
   const token = req.cookies.get('token')?.value;
@@ -63,7 +62,7 @@ async function getAuthenticatedUser(req: NextRequest, body?: any): Promise<{
         return { ...user, authMethod: 'jwt' };
       }
     } catch (error) {
-      // JWT failed, continue to other methods
+      // JWT failed, continue to mobile JWT
     }
   }
 
@@ -81,103 +80,10 @@ async function getAuthenticatedUser(req: NextRequest, body?: any): Promise<{
       }
     }
   } catch (error) {
-    // Mobile JWT failed, continue to biometric
-  }
-
-  // Try biometric authentication (web app)
-  if (body?.username && body?.authenticationResponse) {
-    const biometricUser = await verifyBiometricAuth(body.username, body.authenticationResponse, req);
-    return {
-      id: biometricUser.user_id,
-      name: biometricUser.name,
-      role: biometricUser.role,
-      is_active: true,
-      authMethod: 'biometric'
-    };
+    // Mobile JWT failed
   }
 
   throw new Error('No valid authentication method provided');
-}
-
-// Verify biometric authentication (unchanged from original)
-async function verifyBiometricAuth(username: string, authenticationResponse: any, request: NextRequest) {
-  const user = await db.users.findUnique({
-    where: { id_number: username },
-  });
-
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  const challengeRecord = await db.webAuthnCredentialChallenge.findUnique({
-    where: { userId: user.id },
-  });
-
-  if (!challengeRecord || new Date() > challengeRecord.expires) {
-    throw new Error('Challenge not found or expired');
-  }
-
-  const credentialId = authenticationResponse.id;
-  const credential = await db.webAuthnCredentials.findFirst({
-    where: { credentialId },
-  });
-
-  if (!credential || credential.userId !== user.id) {
-    throw new Error('Credential not found or does not belong to user');
-  }
-
-  const host = request.headers.get('host') || '';
-  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-
-  const expectedOrigin = isLocalhost
-    ? 'http://localhost:3000'
-    : (process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000');
-
-  const expectedRPID = isLocalhost
-    ? 'localhost'
-    : (process.env.WEBAUTHN_RP_ID || 'localhost');
-
-  const verification = await verifyAuthenticationResponse({
-    response: authenticationResponse,
-    expectedChallenge: challengeRecord.challenge,
-    expectedOrigin,
-    expectedRPID,
-    requireUserVerification: false,
-    credential: {
-      id: credential.credentialId,
-      publicKey: new Uint8Array(Buffer.from(credential.publicKey, 'base64url')),
-      counter: credential.counter,
-    },
-  });
-
-  if (!verification.verified) {
-    throw new Error('Biometric verification failed');
-  }
-
-  await db.webAuthnCredentials.update({
-    where: { id: credential.id },
-    data: { counter: verification.authenticationInfo.newCounter },
-  });
-
-  await db.webAuthnCredentialChallenge.delete({
-    where: { userId: user.id },
-  });
-
-  const employee = await db.employees.findUnique({
-    where: { employee_id: user.id },
-  });
-
-  if (!employee) {
-    throw new Error('Employee not found');
-  }
-
-  return {
-    user_id: user.id,
-    employee_id: employee.id,
-    name: employee.name,
-    email: employee.email,
-    role: user.role
-  };
 }
 
 // Mobile-specific helper functions
@@ -456,7 +362,12 @@ export async function POST(request: NextRequest) {
     // Detect if this is a mobile request
     const isMobileRequest = body?.type?.startsWith('class_') || !!body?.location;
     
-    const user = await getAuthenticatedUser(request, body);
+    console.log('Class check-in request:', {
+      isMobileRequest,
+      body: JSON.stringify(body, null, 2)
+    });
+
+    const user = await getAuthenticatedUser(request);
 
     // Mobile request validation
     if (isMobileRequest) {
@@ -464,6 +375,7 @@ export async function POST(request: NextRequest) {
         mobileClassAttendanceSchema.parse(body);
       } catch (error) {
         if (error instanceof z.ZodError) {
+          console.error('Mobile validation error:', error.issues);
           return NextResponse.json(
             { success: false, error: error.issues[0].message },
             { status: 400 }
@@ -511,6 +423,8 @@ export async function POST(request: NextRequest) {
                             action;
     const trainer_id = user.id;
 
+    console.log('Normalized action:', normalizedAction, 'for class:', class_id);
+
     if (!class_id) {
       return NextResponse.json(
         { success: false, error: 'class_id is required' },
@@ -533,6 +447,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!classInfo || !classInfo.is_active) {
+      console.error('Class not found or inactive:', class_id);
       return NextResponse.json(
         { success: false, error: 'Class not found or inactive' },
         { status: 404 }
@@ -549,6 +464,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!assignment) {
+      console.error('Trainer not assigned to class:', trainer_id, class_id);
       return NextResponse.json(
         { success: false, error: 'You are not assigned to this class' },
         { status: 403 }
@@ -564,6 +480,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!workAttendance) {
+      console.error('No work attendance found for trainer:', trainer_id);
       return NextResponse.json(
         { success: false, error: 'You must check into work before checking into classes' },
         { status: 400 }
@@ -571,16 +488,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if trainer has an active work session
-    const hasActiveWorkSession = () => {
-      if (!workAttendance.sessions || !Array.isArray(workAttendance.sessions)) {
-        return !!(workAttendance.check_in_time && !workAttendance.check_out_time);
-      }
-      return workAttendance.sessions.some((session: any) => 
-        session.check_in && !session.check_out
-      );
-    };
+    const hasActiveWorkSession = !!(workAttendance.check_in_time && !workAttendance.check_out_time);
 
-    if (!hasActiveWorkSession()) {
+    if (!hasActiveWorkSession) {
+      console.error('No active work session for trainer:', trainer_id);
       return NextResponse.json(
         { success: false, error: 'You must be checked into work to check into classes' },
         { status: 400 }
@@ -642,7 +553,8 @@ export async function POST(request: NextRequest) {
       const activeClassSessions = await db.classAttendance.findMany({
         where: {
           trainer_id: trainer_id,
-          date: new Date(currentDate)
+          date: new Date(currentDate),
+          check_out_time: null
         },
         include: {
           class: {
@@ -651,22 +563,15 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      const currentActiveSession = activeClassSessions.find(session => {
-        if (!session.check_out_time) return true;
-        if (session.auto_checkout && new Date(session.check_out_time) > currentTime) {
-          return true;
-        }
-        return false;
-      });
-
-      if (currentActiveSession) {
+      if (activeClassSessions.length > 0) {
+        const currentActiveSession = activeClassSessions[0];
         return NextResponse.json(
           { success: false, error: `You are already checked into ${currentActiveSession.class.name}. Please check out first.` },
           { status: 400 }
         );
       }
 
-      // Calculate auto-checkout time
+      // Calculate auto-checkout time for web
       const maxClassDuration = Math.min(classInfo.duration_hours || 2, 2);
       const autoCheckoutTime = new Date(currentTime);
       autoCheckoutTime.setHours(autoCheckoutTime.getHours() + maxClassDuration);
@@ -685,15 +590,18 @@ export async function POST(request: NextRequest) {
         }
       });
 
+      console.log('Class attendance created:', classAttendance);
+
       // Create appropriate response based on request type
       if (isMobileRequest) {
         return NextResponse.json({
           success: true,
-          message: `Checked in to class at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+          message: `Checked in to ${classInfo.name} at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
           data: {
             timestamp: currentTime,
             type: body.type,
             class_id: class_id,
+            class_name: classInfo.name,
             location_verified: true,
             class_check_in_time: currentTime
           }
@@ -750,11 +658,12 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Checked out from class at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+        message: `Checked out from ${classInfo.name} at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
         data: {
           timestamp: currentTime,
           type: body.type,
           class_id: class_id,
+          class_name: classInfo.name,
           location_verified: true,
           class_check_out_time: currentTime,
           duration: `${hoursDiff}h ${remainingMinutes}m`
@@ -795,7 +704,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const user = await getAuthenticatedUser(request, body);
+    const user = await getAuthenticatedUser(request);
     const { attendance_id, action } = body;
 
     if (action !== 'check-out') {
