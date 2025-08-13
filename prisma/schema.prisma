@@ -238,7 +238,7 @@ model BiometricEnrollments {
 model BiometricLogs {
   id          Int       @id @default(autoincrement())
   user_id     Int       // References Users.id
-  action      String    @db.Vacheck_in_timerChar(50)  // 'enrollment', 'authentication', 'deletion'
+  action      String    @db.VarChar(50)  // 'enrollment', 'authentication', 'deletion'
   status      String    @db.VarChar(20)  // 'success', 'failed'
   ip_address  String?   @db.VarChar(45)
   user_agent  String?   @db.Text

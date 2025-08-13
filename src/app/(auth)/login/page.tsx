@@ -1,33 +1,56 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import LoginForm from '@/components/auth/LoginForm';
-import BiometricCheckin from '@/components/attendance/BiometricCheckin';
-import { Building2, Clock, Users, ArrowRight, Fingerprint, Shield } from 'lucide-react';
-import { Button } from "@/components/ui/button";
+import { Building2, Clock, Users, Shield, MapPin } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
+import { checkLocation } from '@/lib/geofence'; // make sure path is correct
+import { useToast } from "@/components/ui/use-toast";
 
 export default function LoginPage() {
-  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [locationAllowed, setLocationAllowed] = useState(false);
+  const [checkingLocation, setCheckingLocation] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    async function verifyLocation() {
+      try {
+        const allowed = await checkLocation();
+        setLocationAllowed(allowed);
+
+        if (!allowed) {
+          toast({
+            title: "Access Denied",
+            description: "You are not in an allowed location to log in.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error checking location:", error);
+        toast({
+          title: "Location Error",
+          description: "Could not verify your location. Please enable GPS.",
+          variant: "destructive",
+        });
+      } finally {
+        setCheckingLocation(false);
+      }
+    }
+
+    verifyLocation();
+  }, [toast]);
 
   return (
     <div className="min-h-screen flex">
       {/* Left side - Hero Section */}
       <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col justify-between p-16">
-        {/* Content */}
         <div className="flex flex-col justify-center items-center h-full">
           <h1 className="text-4xl font-bold text-white mb-6">
             Welcome to our Attendance System
           </h1>
           <p className="text-blue-100 text-2xl mb-12">
-            Streamline your attendance tracking with our modern, biometric-enabled platform.
+            Streamline your attendance tracking with our modern platform.
           </p>
-         
-          {/* Updated Feature List */}
           <div className="space-y-6">
-            <div className="flex items-center space-x-4">
-              <Fingerprint className="w-9 h-9 text-blue-200" />
-              <p className="text-white text-xl">Biometric authentication</p>
-            </div>
             <div className="flex items-center space-x-4">
               <Clock className="w-9 h-9 text-blue-200" />
               <p className="text-white text-xl">Instant work & class check-in</p>
@@ -46,8 +69,6 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-       
-        {/* Footer */}
         <div>
           <p className="text-blue-200 text-sm">
             © 2025 Optimum Computer Services. All rights reserved.
@@ -55,90 +76,29 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right side - Biometric Check-In or Login Form */}
+      {/* Right side - Login Form or Location Restriction */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 lg:p-8">
         <div className="w-full max-w-2xl">
-          
-          {!showLoginForm ? (
-            // Biometric Check-In View
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-4">
-                  <div className="p-3 bg-blue-100 rounded-full">
-                    <Fingerprint className="w-8 h-8 text-blue-600" />
-                  </div>
+          {checkingLocation ? (
+            <div className="text-center text-gray-600">Checking your location...</div>
+          ) : locationAllowed ? (
+            <Card className="border-gray-200 bg-white">
+              <CardContent className="pt-6">
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    Sign In to Your Account
+                  </h2>
+                  <p className="text-gray-600">
+                    Access your dashboard and account settings
+                  </p>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Biometric Attendance
-                </h2>
-                <p className="text-gray-600">
-                  Use your fingerprint or Face ID for instant, secure check-in
-                </p>
-              </div>
-
-              {/* Biometric Check-In Component */}
-              <div className="bg-white rounded-lg">
-                <BiometricCheckin />
-              </div>
-
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">or</span>
-                </div>
-              </div>
-
-              {/* Full Login Option */}
-              <Card className="border-gray-200 bg-white">
-                <CardContent className="pt-6">
-                  <div className="text-center space-y-4">
-                    <div>
-                      <h3 className="font-medium text-gray-900">Need Dashboard Access?</h3>
-                      <p className="text-sm text-gray-600">
-                        Access your dashboard, reports, and account settings
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => setShowLoginForm(true)}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      <span>Sign In to Dashboard</span>
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ) : (
-            // Full Login Form View
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Sign In to Your Account
-                </h2>
-                <p className="text-gray-600">
-                  Access your dashboard and account settings
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg p-6">
                 <LoginForm />
-              </div>
-
-              {/* Back to Biometric Check-In */}
-              <div className="text-center">
-                <Button
-                  onClick={() => setShowLoginForm(false)}
-                  variant="ghost"
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  ← Back to Biometric Check-In
-                </Button>
-              </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-center text-red-600 space-y-4">
+              <MapPin className="mx-auto w-12 h-12 text-red-500" />
+              <p className="text-lg font-semibold">You are not in an allowed location to log in.</p>
             </div>
           )}
         </div>
