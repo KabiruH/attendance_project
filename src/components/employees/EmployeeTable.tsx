@@ -196,18 +196,21 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString();
-    } catch {
-      return dateStr;
-    }
-  };
+const formatDate = (dateStr: string) => {
+  try {
+    return new Date(dateStr).toLocaleDateString('en-KE', {
+      timeZone: 'Africa/Nairobi'
+    });
+  } catch {
+    return dateStr;
+  }
+};
 
   const formatTime = (timeStr: string | null) => {
     if (!timeStr) return '-';
     try {
-      return new Date(timeStr).toLocaleTimeString('en-US', {
+      return new Date(timeStr).toLocaleTimeString('en-KE', {
+        timeZone: 'Africa/Nairobi',
         hour: '2-digit',
         minute: '2-digit',
         hour12: true

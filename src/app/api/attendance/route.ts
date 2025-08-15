@@ -402,7 +402,7 @@ export async function GET(request: NextRequest) {
         user = payload as unknown as JwtPayload;
         authMethod = 'jwt';
       } catch (error) {
-        console.log('JWT cookie verification failed, trying mobile JWT...');
+
       }
     }
 
@@ -419,16 +419,15 @@ export async function GET(request: NextRequest) {
             name: mobileAuth.payload.name || ''
           };
           authMethod = 'mobile_jwt';
-          console.log('✅ Mobile JWT authenticated:', user.name);
+     
         }
       } catch (error) {
-        console.log('Mobile JWT verification failed:', error);
+
       }
     }
 
     // If no authentication found, return unauthenticated state
     if (!user) {
-      console.log('❌ No valid authentication found');
       return NextResponse.json({
         success: true,
         role: 'unauthenticated',
@@ -436,8 +435,6 @@ export async function GET(request: NextRequest) {
         attendanceData: [],
       });
     }
-
-    console.log(`🔐 Authenticated user: ${user.name} (${authMethod})`);
 
     const currentDate = new Date().toISOString().split('T')[0];
     const autoProcessResult = await processAutomaticAttendance();
@@ -487,12 +484,6 @@ export async function GET(request: NextRequest) {
     const isCheckedIn = hasActiveSession(todayAttendance) &&
       currentTime.getHours() < TIME_CONSTRAINTS.WORK_END;
 
-    console.log(`📊 User ${user.name} attendance status:`, {
-      isCheckedIn,
-      hasTodayRecord: !!todayAttendance,
-      recordsCount: monthlyData.length
-    });
-
     return NextResponse.json({
       success: true,
       role: 'employee',
@@ -513,7 +504,6 @@ export async function GET(request: NextRequest) {
 
 // POST endpoint - supports both web and mobile
 export async function POST(request: NextRequest) {
-  console.log('=== ATTENDANCE API CALLED ===');
   const clientIP = getClientIP(request);
   const userAgent = request.headers.get('user-agent') || 'Unknown';
   
@@ -522,14 +512,7 @@ export async function POST(request: NextRequest) {
     
     // Detect if this is a mobile request
     const isMobileRequest = body?.type?.startsWith('work_') || !!body?.location;
-    
-    console.log('Attendance request:', {
-      action: body.action,
-      type: body.type,
-      hasLocation: !!body.location,
-      hasMobileToken: !!body.mobile_token,
-      isMobileRequest
-    });
+
 
     // Validate mobile requests
     if (isMobileRequest) {
