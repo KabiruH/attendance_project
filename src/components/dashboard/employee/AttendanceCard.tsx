@@ -37,7 +37,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({
   const [showClassModal, setShowClassModal] = useState(false);
 
   // Check if user is a trainer (adjust role check based on your schema)
-  const isTrainer = userRole === 'trainer' || userRole === 'employee'; // Adjust as needed
+  const isTrainer = userRole == 'admin' || userRole == 'employee'; // Adjust as needed
 
   const handleClassCheckInClick = () => {
     setShowClassModal(true);
