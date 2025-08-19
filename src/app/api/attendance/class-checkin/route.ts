@@ -525,7 +525,7 @@ export async function POST(request: NextRequest) {
             
             return NextResponse.json({
               success: true,
-              message: `Re-checked in to class at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} (previous session was auto-closed)`,
+              message: `Re-checked in to class at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })} (previous session was auto-closed)`,
               data: {
                 timestamp: currentTime,
                 type: body.type,
@@ -596,7 +596,7 @@ export async function POST(request: NextRequest) {
       if (isMobileRequest) {
         return NextResponse.json({
           success: true,
-          message: `Checked in to ${classInfo.name} at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+          message: `Checked in to ${classInfo.name} at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`,
           data: {
             timestamp: currentTime,
             type: body.type,
@@ -658,7 +658,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Checked out from ${classInfo.name} at ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+        message: `Checked out from ${classInfo.name} at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`,
         data: {
           timestamp: currentTime,
           type: body.type,

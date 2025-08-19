@@ -275,8 +275,8 @@ async function handleCheckIn(
 
   const message = isMobileRequest
     ? (status === 'Late' 
-        ? `Checked in late at ${currentTime.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`
-        : `Checked in on time at ${currentTime.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`)
+        ? `Checked in late at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`
+        : `Checked in on time at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`)
     : undefined;
 
   return { 
@@ -359,7 +359,7 @@ async function handleCheckOut(
     return { 
       success: true, 
       data: attendance,
-      message: `Checked out at ${currentTime.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`
+      message: `Checked out at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`
     };
   } else {
     // Web: Multiple sessions logic

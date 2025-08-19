@@ -76,7 +76,7 @@ const AdminAttendanceAnalytics: React.FC = () => {
       ).length;
       
       return {
-        date: new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        date: new Date(dateStr).toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' }),
         present: presentCount,
         absent: Math.max(0, totalEmployees - presentCount),
         rate: totalEmployees > 0 ? Math.round((presentCount / totalEmployees) * 100) : 0

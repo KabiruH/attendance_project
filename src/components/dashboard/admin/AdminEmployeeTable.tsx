@@ -94,7 +94,8 @@ const AdminEmployeeTable: React.FC = () => {
 
   const formatTime = (dateString: string | null) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleTimeString('en-US', {
+    return new Date(dateString).toLocaleTimeString('en-KE', {
+      timeZone: 'Africa/Nairobi',
       hour: '2-digit',
       minute: '2-digit'
     });

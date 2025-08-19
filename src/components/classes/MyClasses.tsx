@@ -97,7 +97,7 @@ export default function MyClasses({ userId, showRemoveOption = true, onClassRemo
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('en-KE', {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
@@ -105,7 +105,8 @@ export default function MyClasses({ userId, showRemoveOption = true, onClassRemo
   };
 
   const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('en-US', {
+    return new Date(timeString).toLocaleTimeString('en-KE', {
+      timeZone: 'Africa/Nairobi',
       hour: '2-digit',
       minute: '2-digit'
     });
