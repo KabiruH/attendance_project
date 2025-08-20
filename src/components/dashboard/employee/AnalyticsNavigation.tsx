@@ -22,7 +22,7 @@ const AnalyticsNavigation: React.FC<AnalyticsNavigationProps> = ({
   const router = useRouter();
   
   // Only show for trainers/teachers
-  const isTrainer = userRole === 'trainer' || userRole === 'employee';
+  const isTrainer =  userRole === 'employee';
   
   if (!isTrainer) {
     return null;

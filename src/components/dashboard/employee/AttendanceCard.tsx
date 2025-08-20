@@ -12,7 +12,6 @@ interface AttendanceCardProps {
   todayHours: string;
   onCheckIn: () => void;
   onCheckOut: () => void;
-  // New props for class functionality
   userRole?: string;
   onClassCheckIn?: (classId: number) => void;
   onClassCheckOut?: (attendanceId: number) => void;

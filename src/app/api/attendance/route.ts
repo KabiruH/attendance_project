@@ -91,13 +91,22 @@ async function authenticateUser(request: NextRequest): Promise<{ userId: number;
   try {
     const mobileAuth = await verifyMobileJWT(request);
     if (mobileAuth.success && mobileAuth.payload) {
+      
+      // 🔧 FIX: Use the employeeId from JWT payload
+      // The mobile JWT contains employeeId which should match employees.id
+      const employeeId = mobileAuth.payload.employeeId;
+      
+      if (!employeeId) {
+        throw new Error('No employeeId in mobile JWT payload');
+      }
+      
       return { 
-        userId: mobileAuth.payload.employeeId || mobileAuth.payload.userId, 
+        userId: employeeId,  // Use employeeId directly
         authMethod: 'mobile_jwt' 
       };
     }
   } catch (error) {
-    // Mobile JWT failed
+    console.error('Mobile JWT verification failed:', error);
   }
 
   throw new Error('No valid authentication method provided');
