@@ -45,9 +45,9 @@ interface AttendanceSession {
 }
 
 const TIME_CONSTRAINTS = {
-  CHECK_IN_START: 7,  // 7 AM
-  WORK_START: 9,      // 9 AM
-  WORK_END: 17        // 5 PM
+  CHECK_IN_START: 4,  // 7 AM
+  WORK_START: 6,      // 9 AM
+  WORK_END: 14        // 5 PM
 };
 
 // Geofence configuration for mobile
