@@ -43,22 +43,35 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
   };
 
   // Helper function to safely parse sessions from data
-  const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
-    // If sessions data exists, use it
-    if (employee.sessions && Array.isArray(employee.sessions)) {
-      return employee.sessions;
-    }
-    
-    // Fallback: Convert old format to sessions format
-    if (employee.timeIn) {
-      return [{
-        check_in: employee.timeIn,
-        check_out: employee.timeOut
-      }];
-    }
-    
-    return [];
-  };
+const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
+  // If sessions data exists, use it
+  if (employee.sessions && Array.isArray(employee.sessions)) {
+    return employee.sessions.map((session: any) => {
+      // Handle mobile format (check_in_time/check_out_time as strings)
+      if (session.check_in_time || session.check_out_time) {
+        return {
+          check_in: session.check_in_time,
+          check_out: session.check_out_time
+        };
+      }
+      // Handle web format (check_in/check_out as Date objects or strings)
+      return {
+        check_in: session.check_in,
+        check_out: session.check_out
+      };
+    });
+  }
+  
+  // Fallback: Convert old format to sessions format
+  if (employee.timeIn) {
+    return [{
+      check_in: employee.timeIn,
+      check_out: employee.timeOut
+    }];
+  }
+  
+  return [];
+};
 
   // Helper function to check if employee has active session
   const hasActiveSession = (employee: Employee): boolean => {

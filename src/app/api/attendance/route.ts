@@ -43,7 +43,7 @@ interface AttendanceSession {
   user_agent?: string;
   auto_checkout?: boolean;
 }
-
+// Had to push back time by 3 hours because of the time difference in the hosted server
 const TIME_CONSTRAINTS = {
   CHECK_IN_START: 4,  // 7 AM
   WORK_START: 6,      // 9 AM
@@ -311,57 +311,65 @@ async function handleCheckOut(
     return { success: false, error: 'No check-in record found for today' };
   }
 
-  if (isMobileRequest) {
-    // Mobile: Simple check-out logic
-    if (!existingAttendance.check_in_time) {
-      return { success: false, error: 'You must check in before checking out' };
-    }
+ // Replace the mobile check-out section in handleCheckOut function
+if (isMobileRequest) {
+  // Mobile: Simple check-out logic
+  if (!existingAttendance.check_in_time) {
+    return { success: false, error: 'You must check in before checking out' };
+  }
 
-    if (existingAttendance.check_out_time) {
-      return { success: false, error: 'You have already checked out for work today' };
-    }
+  if (existingAttendance.check_out_time) {
+    return { success: false, error: 'You have already checked out for work today' };
+  }
 
-    let existingSessions: AttendanceSession[] = [];
-    
-    if (existingAttendance.sessions) {
-      try {
-        const sessionData = existingAttendance.sessions as unknown;
-        if (Array.isArray(sessionData)) {
-          existingSessions = sessionData as AttendanceSession[];
-        } else if (typeof sessionData === 'string') {
-          existingSessions = JSON.parse(sessionData) as AttendanceSession[];
-        }
-      } catch (parseError) {
-        console.error('Error parsing existing sessions:', parseError);
-        existingSessions = [];
+  let existingSessions: AttendanceSession[] = [];
+  
+  if (existingAttendance.sessions) {
+    try {
+      const sessionData = existingAttendance.sessions as unknown;
+      if (Array.isArray(sessionData)) {
+        existingSessions = sessionData as AttendanceSession[];
+      } else if (typeof sessionData === 'string') {
+        existingSessions = JSON.parse(sessionData) as AttendanceSession[];
       }
+    } catch (parseError) {
+      console.error('Error parsing existing sessions:', parseError);
+      existingSessions = [];
     }
+  }
 
-    const checkoutSession: AttendanceSession = {
-      check_out_time: currentTime.toISOString(),
-      type: 'work',
-      location,
-      ip_address: clientIP,
-      user_agent: userAgent
-    };
+  // Find the active session and update it instead of creating a new one
+  const activeSessionIndex = existingSessions.findIndex(session => 
+    session.check_in_time && !session.check_out_time
+  );
 
-    const updatedSessions = [...existingSessions, checkoutSession];
-    const sessionsJson = JSON.parse(JSON.stringify(updatedSessions));
-
-    const attendance = await db.attendance.update({
-      where: { id: existingAttendance.id },
-      data: {
-        check_out_time: currentTime,
-        sessions: sessionsJson
-      }
-    });
-
-    return { 
-      success: true, 
-      data: attendance,
-      message: `Checked out at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`
-    };
+  if (activeSessionIndex !== -1) {
+    // Update existing session
+    existingSessions[activeSessionIndex].check_out_time = currentTime.toISOString();
   } else {
+    // If no active session found, add check_out_time to the last session
+    if (existingSessions.length > 0) {
+      existingSessions[existingSessions.length - 1].check_out_time = currentTime.toISOString();
+    }
+  }
+
+  const sessionsJson = JSON.parse(JSON.stringify(existingSessions));
+
+  const attendance = await db.attendance.update({
+    where: { id: existingAttendance.id },
+    data: {
+      check_out_time: currentTime,
+      sessions: sessionsJson
+    }
+  });
+
+  return { 
+    success: true, 
+    data: attendance,
+    message: `Checked out at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`
+  };
+}
+  else {
     // Web: Multiple sessions logic
     const existingSessions: WorkSession[] = parseSessionsFromJson(existingAttendance.sessions);
     const activeSession = existingSessions.find(session => session.check_in && !session.check_out);

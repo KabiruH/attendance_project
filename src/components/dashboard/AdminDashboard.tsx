@@ -63,7 +63,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   }, []);
 
   // Check if admin is also a trainer
-  const isAdminTrainer = userRole === 'admin' || userRole === 'manager'; // Adjust as needed
+  const isAdminTrainer = userRole === 'admin' || userRole === 'employee'; 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-6 space-y-6">
