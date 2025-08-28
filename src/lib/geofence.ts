@@ -16,7 +16,7 @@ const CENTER_COORDINATES: Coordinates = {
   
 };
 // const MAX_DISTANCE_METERS = 50; // 50m radius
-const MAX_DISTANCE_METERS = 600_000; // 50m radius
+const MAX_DISTANCE_METERS = 2_000_000; // 50m radius
 
 // Haversine formula to calculate distance between two points in meters
 function getDistanceInMeters(
