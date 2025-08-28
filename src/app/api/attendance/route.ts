@@ -54,7 +54,7 @@ const TIME_CONSTRAINTS = {
 const GEOFENCE = {
   latitude: -0.0236,
   longitude: 37.9062,
-  radius: 600_000,
+  radius: 2_000_000,
 };
 
 // Mobile request validation schema
@@ -173,38 +173,86 @@ function parseSessionsFromJson(sessionsJson: any): WorkSession[] {
 }
 
 function hasActiveSession(attendance: any): boolean {
-  if (!attendance) return false;
-
-  if (attendance.sessions && Array.isArray(attendance.sessions)) {
-    return attendance.sessions.some((session: WorkSession) =>
-      session.check_in && !session.check_out
-    );
+  if (!attendance) {
+    console.log('❌ hasActiveSession: No attendance record');
+    return false;
   }
 
-  return !!(attendance.check_in_time && !attendance.check_out_time);
+  console.log('=== hasActiveSession DEBUG ===');
+  console.log('Attendance ID:', attendance.id);
+  console.log('check_in_time:', !!attendance.check_in_time);
+  console.log('check_out_time:', !!attendance.check_out_time);
+  console.log('sessions:', attendance.sessions);
+
+  if (attendance.sessions && Array.isArray(attendance.sessions)) {
+    console.log('Using sessions array, count:', attendance.sessions.length);
+    
+    const activeSession = attendance.sessions.some((session: any) => {
+      // Handle both formats: check_in/check_out AND check_in_time/check_out_time
+      const hasCheckIn = session.check_in || session.check_in_time;
+      const hasCheckOut = session.check_out || session.check_out_time;
+      const isActive = hasCheckIn && !hasCheckOut;
+      
+      console.log('Session:', {
+        hasCheckIn: !!hasCheckIn,
+        hasCheckOut: !!hasCheckOut,
+        isActive
+      });
+      
+      return isActive;
+    });
+    
+    console.log('Active session found:', activeSession);
+    console.log('=== END hasActiveSession DEBUG ===');
+    return activeSession;
+  }
+
+  // Fallback to old format
+  const fallbackResult = !!(attendance.check_in_time && !attendance.check_out_time);
+  console.log('Using fallback logic:', fallbackResult);
+  console.log('=== END hasActiveSession DEBUG ===');
+  
+  return fallbackResult;
 }
 
-// Check-in handler that supports both web and mobile
+// Replace your entire handleCheckIn function with this:
+
 async function handleCheckIn(
-  employee_id: number, 
-  currentTime: Date, 
-  currentDate: string, 
-  isMobileRequest: boolean = false, 
+  employee_id: number,
+  currentTime: Date,
+  currentDate: string,
+  isMobileRequest: boolean = false,
   location?: any,
   clientIP?: string,
   userAgent?: string
 ): Promise<AttendanceResponse> {
+  console.log('=== HANDLE CHECK-IN DEBUG ===');
+  console.log('employee_id:', employee_id);
+  console.log('currentTime:', currentTime);
+  console.log('currentDate:', currentDate);
+  console.log('isMobileRequest:', isMobileRequest);
+  console.log('Current hour:', currentTime.getHours());
+ 
   if (currentTime.getHours() < TIME_CONSTRAINTS.CHECK_IN_START) {
+    console.log('❌ Too early - before', TIME_CONSTRAINTS.CHECK_IN_START);
     return { success: false, error: 'Check-in not allowed before 7 AM' };
   }
 
   if (currentTime.getHours() >= TIME_CONSTRAINTS.WORK_END) {
+    console.log('❌ Too late - after', TIME_CONSTRAINTS.WORK_END);
     return { success: false, error: 'Check-in not allowed after 5 PM' };
   }
 
   const existingAttendance = await db.attendance.findFirst({
     where: { employee_id, date: new Date(currentDate) },
   });
+
+  console.log('Existing attendance found:', !!existingAttendance);
+  if (existingAttendance) {
+    console.log('Existing attendance ID:', existingAttendance.id);
+    console.log('Has check_in_time:', !!existingAttendance.check_in_time);
+    console.log('Has sessions:', !!existingAttendance.sessions);
+  }
 
   const startTime = new Date(currentTime);
   startTime.setHours(TIME_CONSTRAINTS.WORK_START, 0, 0, 0);
@@ -214,14 +262,68 @@ async function handleCheckIn(
     if (isMobileRequest) {
       // Mobile: Check if already checked in for work
       if (existingAttendance.check_in_time) {
+        console.log('❌ Mobile: Already checked in');
         return { success: false, error: 'You have already checked in for work today' };
       }
+     
+      console.log('✅ Mobile: Updating existing attendance record');
+      // Update existing record with mobile check-in
+      let existingSessions: any[] = [];
+     
+      if (existingAttendance.sessions) {
+        try {
+          const sessionData = existingAttendance.sessions as unknown;
+          if (Array.isArray(sessionData)) {
+            existingSessions = sessionData;
+          } else if (typeof sessionData === 'string') {
+            existingSessions = JSON.parse(sessionData);
+          }
+        } catch (parseError) {
+          console.error('Error parsing existing sessions:', parseError);
+          existingSessions = [];
+        }
+      }
+     
+      // Add new session in standardized format
+      existingSessions.push({
+        check_in: currentTime,
+        check_out: null,
+        metadata: {
+          type: 'work',
+          location,
+          ip_address: clientIP,
+          user_agent: userAgent
+        }
+      });
+     
+      const attendance = await db.attendance.update({
+        where: { id: existingAttendance.id },
+        data: {
+          check_in_time: currentTime,
+          sessions: existingSessions as unknown as Prisma.JsonArray,
+          status,
+        },
+      });
+
+      console.log('✅ Mobile: Updated attendance record');
+      return {
+        success: true,
+        data: attendance,
+        message: 'Mobile check-in successful'
+      };
     } else {
-      // Web: Allow multiple sessions
+      // WEB: Handle multiple sessions
+      console.log('🌐 Web: Processing existing attendance');
+      
       const existingSessions: WorkSession[] = parseSessionsFromJson(existingAttendance.sessions);
+      console.log('Existing sessions count:', existingSessions.length);
+      
       const activeSession = existingSessions.find(session => session.check_in && !session.check_out);
+      console.log('Active session found:', !!activeSession);
 
       if (activeSession) {
+        // Update existing active session's check-in time
+        console.log('✅ Web: Updating active session check-in time');
         activeSession.check_in = currentTime;
 
         const attendance = await db.attendance.update({
@@ -238,8 +340,11 @@ async function handleCheckIn(
           message: 'Check-in time updated for current session'
         };
       } else {
+        // Create new session
+        console.log('✅ Web: Creating new session');
         existingSessions.push({
-          check_in: currentTime
+          check_in: currentTime,
+          check_out: undefined
         });
 
         const attendance = await db.attendance.update({
@@ -259,14 +364,18 @@ async function handleCheckIn(
     }
   }
 
-  // Create new attendance record
-  const initialSessions: any[] = isMobileRequest 
+  // Create new attendance record (only if none exists)
+  console.log('🆕 Creating new attendance record');
+  const initialSessions: any[] = isMobileRequest
     ? [{
-        check_in_time: currentTime.toISOString(),
-        type: 'work',
-        location,
-        ip_address: clientIP,
-        user_agent: userAgent
+        check_in: currentTime,
+        check_out: null,
+        metadata: {
+          type: 'work',
+          location,
+          ip_address: clientIP,
+          user_agent: userAgent
+        }
       }]
     : [{
         check_in: currentTime
@@ -282,16 +391,18 @@ async function handleCheckIn(
     },
   });
 
+  console.log('✅ Created new attendance record with ID:', attendance.id);
+
   const message = isMobileRequest
-    ? (status === 'Late' 
+    ? (status === 'Late'
         ? `Checked in late at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`
         : `Checked in on time at ${currentTime.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' })}`)
     : undefined;
 
-  return { 
-    success: true, 
+  return {
+    success: true,
     data: attendance,
-    message 
+    message
   };
 }
 
@@ -321,6 +432,8 @@ async function handleCheckOut(
   }
 
  // Replace the mobile check-out section in handleCheckOut function
+// Replace the mobile check-out section in handleCheckOut function:
+
 if (isMobileRequest) {
   // Mobile: Simple check-out logic
   if (!existingAttendance.check_in_time) {
@@ -331,15 +444,15 @@ if (isMobileRequest) {
     return { success: false, error: 'You have already checked out for work today' };
   }
 
-  let existingSessions: AttendanceSession[] = [];
+  let existingSessions: any[] = [];
   
   if (existingAttendance.sessions) {
     try {
       const sessionData = existingAttendance.sessions as unknown;
       if (Array.isArray(sessionData)) {
-        existingSessions = sessionData as AttendanceSession[];
+        existingSessions = sessionData;
       } else if (typeof sessionData === 'string') {
-        existingSessions = JSON.parse(sessionData) as AttendanceSession[];
+        existingSessions = JSON.parse(sessionData);
       }
     } catch (parseError) {
       console.error('Error parsing existing sessions:', parseError);
@@ -347,28 +460,31 @@ if (isMobileRequest) {
     }
   }
 
-  // Find the active session and update it instead of creating a new one
+  // Find the active session and update it
   const activeSessionIndex = existingSessions.findIndex(session => 
-    session.check_in_time && !session.check_out_time
+    session.check_in && !session.check_out
   );
 
   if (activeSessionIndex !== -1) {
     // Update existing session
-    existingSessions[activeSessionIndex].check_out_time = currentTime.toISOString();
+    existingSessions[activeSessionIndex].check_out = currentTime;
+    
+    // Add checkout metadata
+    existingSessions[activeSessionIndex].checkout_metadata = {
+      location,
+      ip_address: clientIP,
+      user_agent: userAgent
+    };
   } else {
-    // If no active session found, add check_out_time to the last session
-    if (existingSessions.length > 0) {
-      existingSessions[existingSessions.length - 1].check_out_time = currentTime.toISOString();
-    }
+    // If no active session found, this shouldn't happen, but handle it
+    return { success: false, error: 'No active session found to check out' };
   }
-
-  const sessionsJson = JSON.parse(JSON.stringify(existingSessions));
 
   const attendance = await db.attendance.update({
     where: { id: existingAttendance.id },
     data: {
       check_out_time: currentTime,
-      sessions: sessionsJson
+      sessions: existingSessions as unknown as Prisma.JsonArray,
     }
   });
 

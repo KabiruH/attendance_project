@@ -38,46 +38,70 @@ const AdminPersonalAttendance: React.FC<AdminPersonalAttendanceProps> = ({
     handleClassCheckOut
   } = useClassAttendance(employee_id);
 
-  const fetchPersonalAttendanceStatus = async () => {
-    if (!employee_id) return;
+ // Update your fetchPersonalAttendanceStatus in AdminPersonalAttendance.tsx:
 
-    try {
-      const response = await fetch('/api/attendance/status', {
+const fetchPersonalAttendanceStatus = async () => {
+  if (!employee_id) return;
+
+  try {
+    // Try the status endpoint first (for admin compatibility)
+    let response = await fetch('/api/attendance/status', {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    // If status endpoint doesn't work, try the main attendance endpoint
+    if (!response.ok) {
+      response = await fetch('/api/attendance', {
         method: 'GET',
         credentials: 'include',
       });
+    }
 
-      if (response.ok) {
-        const data = await response.json();
-        setIsCheckedIn(data.isCheckedIn || false);
+    if (response.ok) {
+      const data = await response.json();
+      
+      // 🔍 DEBUG: Log the API response
+      console.log('=== ADMIN FRONTEND DEBUG ===');
+      console.log('API Response:', data);
+      console.log('User role:', data.role);
+      console.log('isCheckedIn from API:', data.isCheckedIn);
+      console.log('personalAttendance:', data.personalAttendance);
+      console.log('attendanceData:', data.attendanceData);
+      console.log('=== END ADMIN FRONTEND DEBUG ===');
+      
+      setIsCheckedIn(data.isCheckedIn || false);
+      
+      // Calculate today's hours
+      const attendanceToCheck = data.personalAttendance || data.attendanceData;
+      if (attendanceToCheck && attendanceToCheck.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        const todayRecord = attendanceToCheck.find((record: any) => 
+          record.date.startsWith(today)
+        );
         
-        // Calculate today's hours if available
-        if (data.personalAttendance && data.personalAttendance.length > 0) {
-          const today = new Date().toISOString().split('T')[0];
-          const todayRecord = data.personalAttendance.find((record: any) => 
-            record.date.startsWith(today)
-          );
-          
-          if (todayRecord) {
-            let hours = 0;
-            if (todayRecord.sessions && Array.isArray(todayRecord.sessions)) {
-              hours = calculateTotalHoursFromSessions(todayRecord.sessions);
-            } else if (todayRecord.check_in_time) {
-              const checkIn = new Date(todayRecord.check_in_time);
-              const checkOut = todayRecord.check_out_time ? new Date(todayRecord.check_out_time) : new Date();
-              hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-            }
-            
-            const hoursInt = Math.floor(hours);
-            const minutes = Math.floor((hours - hoursInt) * 60);
-            setTodayHours(`${hoursInt}h ${minutes}m`);
+        if (todayRecord) {
+          console.log('Today record found:', todayRecord);
+          let hours = 0;
+          if (todayRecord.sessions && Array.isArray(todayRecord.sessions)) {
+            hours = calculateTotalHoursFromSessions(todayRecord.sessions);
+          } else if (todayRecord.check_in_time) {
+            const checkIn = new Date(todayRecord.check_in_time);
+            const checkOut = todayRecord.check_out_time ? new Date(todayRecord.check_out_time) : new Date();
+            hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
           }
+          
+          const hoursInt = Math.floor(hours);
+          const minutes = Math.floor((hours - hoursInt) * 60);
+          setTodayHours(`${hoursInt}h ${minutes}m`);
+          console.log('Calculated hours:', `${hoursInt}h ${minutes}m`);
         }
       }
-    } catch (error) {
-      console.error('Error fetching personal attendance:', error);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching personal attendance:', error);
+  }
+};
 
   const calculateTotalHoursFromSessions = (sessions: any[]): number => {
     if (!sessions || sessions.length === 0) return 0;
