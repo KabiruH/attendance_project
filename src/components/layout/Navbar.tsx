@@ -218,8 +218,8 @@ const Navbar = () => {
                 </span>
                 {/* Responsive company name */}
                 <span className="hidden sm:block text-lg md:text-2xl lg:text-3xl font-bold text-blue-900 tracking-tight leading-tight relative overflow-hidden transition-transform hover:scale-105 duration-300 ease-out">
-                  <span className="hidden lg:inline">Optimum Computer Systems</span>
-                  <span className="lg:hidden">Optimum CS</span>
+                  <span className="hidden lg:inline">Mukiria Technical Training College</span>
+                  <span className="lg:hidden">Mukiria TTC</span>
                   <span className="absolute bottom-0 left-0 w-full h-0.5 bg-red-900 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out"></span>
                 </span>
               </Link>
