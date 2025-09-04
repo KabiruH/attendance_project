@@ -1,30 +1,68 @@
 // app/api/classes/assigned/route.ts  
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/db';
 import { verifyMobileJWT } from '@/lib/auth/mobile-jwt';
+import jwt from 'jsonwebtoken';
 
-export async function GET(request: Request) {
-  try {
-    // Verify JWT token
-    const authResult = await verifyMobileJWT(request);
-    if (!authResult.success || !authResult.payload) {
-      return NextResponse.json(
-        { 
-          success: false,
-          error: "Authentication required" 
-        },
-        { status: 401 }
-      );
+// Unified authentication function (same as class-checkin route)
+async function getAuthenticatedUser(req: NextRequest): Promise<{ 
+  id: number; 
+  name: string; 
+  role: string; 
+  is_active: boolean;
+  authMethod: 'jwt' | 'mobile_jwt';
+}> {
+  // Try JWT first (web app)
+  const token = req.cookies.get('token')?.value;
+  
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
+      const user = await db.users.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, name: true, role: true, is_active: true }
+      });
+
+      if (user && user.is_active) {
+        return { ...user, authMethod: 'jwt' };
+      }
+    } catch (error) {
+      // JWT failed, continue to mobile JWT
     }
+  }
 
-    const { employeeId, userId } = authResult.payload;
-const currentDate = new Date(new Date().toDateString()); // Keeps only date, drops time
+  // Try mobile JWT (mobile app)
+  try {
+    const mobileAuth = await verifyMobileJWT(req);
+    if (mobileAuth.success && mobileAuth.payload) {
+      const user = await db.users.findUnique({
+        where: { id: mobileAuth.payload.employeeId || mobileAuth.payload.userId },
+        select: { id: true, name: true, role: true, is_active: true }
+      });
 
+      if (user && user.is_active) {
+        return { ...user, authMethod: 'mobile_jwt' };
+      }
+    }
+  } catch (error) {
+    // Mobile JWT failed
+  }
+
+  throw new Error('No valid authentication method provided');
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    // Use unified authentication
+    const user = await getAuthenticatedUser(request);
+    const trainerId = user.id;
+
+    const currentDate = new Date(new Date().toDateString()); // Keeps only date, drops time
 
     // Get assigned classes for the trainer
     const assignedClasses = await db.trainerClassAssignments.findMany({
       where: {
-        trainer_id: employeeId || userId,
+        trainer_id: trainerId,
         is_active: true
       },
       include: {
@@ -46,7 +84,7 @@ const currentDate = new Date(new Date().toDateString()); // Keeps only date, dro
     const classIds = assignedClasses.map(assignment => assignment.class_id);
     const todayClassAttendance = await db.classAttendance.findMany({
       where: {
-        trainer_id: employeeId || userId,
+        trainer_id: trainerId,
         class_id: {
           in: classIds
         },
@@ -63,7 +101,7 @@ const currentDate = new Date(new Date().toDateString()); // Keeps only date, dro
     // Combine class info with attendance status
     const classesWithStatus = assignedClasses.map(assignment => {
       const attendance = attendanceMap.get(assignment.class_id);
-      
+     
       return {
         id: assignment.class.id,
         name: assignment.class.name,
@@ -91,15 +129,14 @@ const currentDate = new Date(new Date().toDateString()); // Keeps only date, dro
         date: currentDate
       }
     });
-
   } catch (error) {
     console.error('Get assigned classes error:', error);
     return NextResponse.json(
-      { 
+      {
         success: false,
-        error: "Failed to get assigned classes" 
+        error: error instanceof Error ? error.message : "Failed to get assigned classes"
       },
-      { status: 500 }
+      { status: error instanceof Error && error.message.includes('Authentication') ? 401 : 500 }
     );
   }
 }

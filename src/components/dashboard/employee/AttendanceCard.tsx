@@ -18,6 +18,7 @@ interface AttendanceCardProps {
   isClassLoading?: boolean;
   hasActiveSession?: boolean;
   activeSessionName?: string;
+  employeeId?: string | null; // Add this to the interface
 }
 
 const AttendanceCard: React.FC<AttendanceCardProps> = ({
@@ -31,7 +32,8 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({
   onClassCheckOut,
   isClassLoading = false,
   hasActiveSession = false,
-  activeSessionName = ''
+  activeSessionName = '',
+  employeeId // Add this to the destructuring
 }) => {
   const [showClassModal, setShowClassModal] = useState(false);
 
@@ -125,6 +127,11 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({
                     You must check into work first
                   </p>
                 )}
+                
+                {/* Debug info - remove this after testing */}
+                <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
+                  <strong>Debug:</strong> Employee ID: {employeeId || 'null'}
+                </div>
               </div>
             </>
           )}
@@ -140,10 +147,11 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({
           isLoading={isClassLoading}
           hasActiveSession={hasActiveSession}
           activeSessionName={activeSessionName}
+          employeeId={employeeId} 
         />
       )}
     </>
   );
 };
 
-export default AttendanceCard;
+export default AttendanceCard

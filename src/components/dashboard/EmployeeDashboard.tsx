@@ -95,6 +95,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ data }) => {
         isClassLoading={isClassLoading}
         hasActiveSession={hasActiveSession}
         activeSessionName={activeSessionName}
+        employeeId={employee_id}
       />
 
       {/* Active Class Sessions Card - Only show if there are active sessions */}

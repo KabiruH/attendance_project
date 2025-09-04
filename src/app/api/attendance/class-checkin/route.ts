@@ -215,81 +215,44 @@ async function checkAndPerformClassAutoCheckout(trainerId: number, currentTime: 
   }
 }
 
-// GET /api/attendance/class-checkin - Enhanced to support both web and mobile
+// GET /api/attendance/class-checkin 
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser(request);
     const nowInKenya = DateTime.now().setZone('Africa/Nairobi');
     const currentDate = nowInKenya.toJSDate().toISOString().split('T')[0];
 
-    // Detect if this is a mobile request
+    // Debug logging
     const userAgent = request.headers.get('user-agent') || '';
     const isMobileRequest = user.authMethod === 'mobile_jwt' || userAgent.includes('Mobile');
+    
+     const url = new URL(request.url);
+    const queryEmployeeId = url.searchParams.get('employee_id');
+    
+    console.log("🔍 DEBUG - Request URL:", request.url);
+    console.log("🔍 DEBUG - Query employee_id:", queryEmployeeId);
+    
 
+    console.log("🔍 DEBUG - Authenticated user:", {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      authMethod: user.authMethod
+    });
+
+
+        const userIdToUse = user.role === 'admin' && queryEmployeeId ? 
+      Number(queryEmployeeId) : user.id;
+    
+    console.log("🔍 DEBUG - User ID being used for query:", userIdToUse);
+    
     if (isMobileRequest) {
-      // Mobile response format
-      const currentDateObj = new Date(currentDate);
-
-      // Get today's class attendance
-      const todayClassAttendance = await db.classAttendance.findMany({
-        where: {
-          trainer_id: user.id,
-          date: currentDateObj
-        },
-        include: {
-          class: {
-            select: {
-              name: true,
-              code: true,
-              duration_hours: true
-            }
-          }
-        }
-      }) as ClassAttendanceWithClass[];
-
-      // Check for any active class session
-      const activeClassSession = await hasActiveClassSession(user.id, currentDateObj);
-
-      // Get last 7 days class attendance history
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const classHistory = await db.classAttendance.findMany({
-        where: {
-          trainer_id: user.id,
-          date: {
-            gte: sevenDaysAgo
-          }
-        },
-        orderBy: {
-          date: 'desc'
-        },
-        include: {
-          class: {
-            select: {
-              name: true,
-              code: true
-            }
-          }
-        }
-      }) as ClassAttendanceWithClass[];
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          today: {
-            class_attendance: todayClassAttendance,
-            active_class_session: activeClassSession.hasActive ? activeClassSession.activeClass : null
-          },
-          history: classHistory,
-          current_date: currentDate
-        }
-      });
     } else {
-      // Web response format (original)
+      
+      // Get assignments
       const assignments = await db.trainerClassAssignments.findMany({
         where: {
-          trainer_id: user.id,
+          trainer_id: Number(user.id),
           is_active: true
         },
         include: {
@@ -311,6 +274,8 @@ export async function GET(request: NextRequest) {
           }
         }
       });
+
+      console.log("Assignments for user:", user.id, JSON.stringify(assignments, null, 2));
 
       const activeAssignments = assignments.filter(assignment => assignment.class.is_active);
 
@@ -336,36 +301,22 @@ export async function GET(request: NextRequest) {
         userRole: user.role
       });
     }
-
+    
   } catch (error) {
-    console.error('Error fetching class data:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        assignments: [], 
-        todayAttendance: [], 
-        error: error instanceof Error ? error.message : 'Internal server error' 
-      },
-      { status: 200 }
-    );
+    console.error('❌ Error in class check-in GET:', error);
+    // ... error handling
   }
 }
 
 // POST /api/attendance/class-checkin - Enhanced to handle both web and mobile
 export async function POST(request: NextRequest) {
-  const clientIP = getClientIP(request);
-  const userAgent = request.headers.get('user-agent') || 'Unknown';
 
   try {
     const body = await request.json();
     
     // Detect if this is a mobile request
     const isMobileRequest = body?.type?.startsWith('class_') || !!body?.location;
-    
-    console.log('Class check-in request:', {
-      isMobileRequest,
-      body: JSON.stringify(body, null, 2)
-    });
+  
 
     const user = await getAuthenticatedUser(request);
 
@@ -423,8 +374,6 @@ export async function POST(request: NextRequest) {
                             action;
     const trainer_id = user.id;
 
-    console.log('Normalized action:', normalizedAction, 'for class:', class_id);
-
     if (!class_id) {
       return NextResponse.json(
         { success: false, error: 'class_id is required' },
@@ -455,29 +404,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if trainer is assigned to this class
-    const assignment = await db.trainerClassAssignments.findFirst({
-      where: {
-        trainer_id: trainer_id,
-        class_id: class_id,
-        is_active: true
-      }
-    });
+  const assignment = await db.trainerClassAssignments.findFirst({
+  where: {
+    trainer_id: trainer_id,
+    class_id: class_id,
+    is_active: true
+  }
+});
 
-    if (!assignment) {
-      console.error('Trainer not assigned to class:', trainer_id, class_id);
-      return NextResponse.json(
-        { success: false, error: 'You are not assigned to this class' },
-        { status: 403 }
-      );
-    }
+if (!assignment) {
+  console.error('Trainer not assigned to class:', trainer_id, class_id);
+  return NextResponse.json(
+    { success: false, error: 'You are not assigned to this class' },
+    { status: 403 }
+  );
+}
 
     // Check if trainer has checked into work today
-    const workAttendance = await db.attendance.findFirst({
-      where: {
-        employee_id: trainer_id,
-        date: new Date(currentDate)
-      }
-    });
+  const employee = await db.employees.findFirst({
+  where: {
+    employee_id: trainer_id // This maps Users.id to Employees.employee_id
+  }
+});
+
+if (!employee) {
+  return NextResponse.json(
+    { success: false, error: 'Employee record not found' },
+    { status: 404 }
+  );
+}
+ const workAttendance = await db.attendance.findFirst({
+  where: {
+    employee_id: employee.id, // Now use the correct Employees.id
+   date: new Date(currentDate)
+  }
+});
 
     if (!workAttendance) {
       console.error('No work attendance found for trainer:', trainer_id);
@@ -589,8 +550,6 @@ export async function POST(request: NextRequest) {
           work_attendance_id: workAttendance.id
         }
       });
-
-      console.log('Class attendance created:', classAttendance);
 
       // Create appropriate response based on request type
       if (isMobileRequest) {

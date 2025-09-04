@@ -39,6 +39,15 @@ async function verifyAuth() {
   }
 }
 
+// Resolve employeeId from userId
+async function resolveEmployeeId(userId: number): Promise<number | null> {
+  const employee = await db.employees.findFirst({
+    where: { employee_id: userId },
+    select: { id: true }
+  });
+  return employee ? employee.id : null;
+}
+
 // GET /api/trainers/[id]/my-classes - Fetch trainer's assigned classes with attendance info
 export async function GET(
   request: NextRequest,
@@ -56,27 +65,30 @@ export async function GET(
 
     const { user } = authResult;
     const params = await context.params;
-    const trainerId = parseInt(params.id);
+    const trainerUserId = parseInt(params.id);
 
-    if (isNaN(trainerId)) {
-      return NextResponse.json(
-        { error: 'Invalid trainer ID' },
-        { status: 400 }
-      );
+    if (isNaN(trainerUserId)) {
+      return NextResponse.json({ error: 'Invalid trainer ID' }, { status: 400 });
     }
 
     // Check authorization - users can only view their own classes unless they're admin
-    if (user.role !== 'admin' && user.id !== trainerId) {
+    if (user.role !== 'admin' && user.id !== trainerUserId) {
       return NextResponse.json(
         { error: 'Unauthorized. You can only view your own classes.' },
         { status: 403 }
       );
     }
 
+    // 🔑 Resolve employee.id for this trainer
+    const trainerEmployeeId = await resolveEmployeeId(trainerUserId);
+    if (!trainerEmployeeId) {
+      return NextResponse.json({ error: 'No matching employee found' }, { status: 404 });
+    }
+
     // Fetch trainer's active class assignments with class details and attendance info
     const assignments = await db.trainerClassAssignments.findMany({
       where: {
-        trainer_id: trainerId,
+        trainer_id: trainerEmployeeId,
         is_active: true,
         class: {
           is_active: true // Only show assignments to active classes
@@ -105,7 +117,7 @@ export async function GET(
         // Get the most recent attendance for this class
         const lastAttendance = await db.classAttendance.findFirst({
           where: {
-            trainer_id: trainerId,
+            trainer_id: trainerEmployeeId,
             class_id: assignment.class_id
           },
           orderBy: {
@@ -122,7 +134,7 @@ export async function GET(
         // Get total number of sessions for this class
         const totalSessions = await db.classAttendance.count({
           where: {
-            trainer_id: trainerId,
+            trainer_id: trainerEmployeeId,
             class_id: assignment.class_id,
             status: 'Present'
           }

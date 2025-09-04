@@ -60,16 +60,7 @@ const fetchPersonalAttendanceStatus = async () => {
 
     if (response.ok) {
       const data = await response.json();
-      
-      // 🔍 DEBUG: Log the API response
-      console.log('=== ADMIN FRONTEND DEBUG ===');
-      console.log('API Response:', data);
-      console.log('User role:', data.role);
-      console.log('isCheckedIn from API:', data.isCheckedIn);
-      console.log('personalAttendance:', data.personalAttendance);
-      console.log('attendanceData:', data.attendanceData);
-      console.log('=== END ADMIN FRONTEND DEBUG ===');
-      
+       
       setIsCheckedIn(data.isCheckedIn || false);
       
       // Calculate today's hours
@@ -81,7 +72,6 @@ const fetchPersonalAttendanceStatus = async () => {
         );
         
         if (todayRecord) {
-          console.log('Today record found:', todayRecord);
           let hours = 0;
           if (todayRecord.sessions && Array.isArray(todayRecord.sessions)) {
             hours = calculateTotalHoursFromSessions(todayRecord.sessions);
@@ -283,17 +273,18 @@ const fetchPersonalAttendanceStatus = async () => {
         />
       )}
 
-      {/* Class Check-in Modal */}
-      {isAdminTrainer && (
-        <ClassCheckInModal
-          isOpen={showClassModal}
-          onClose={() => setShowClassModal(false)}
-          onCheckIn={handleClassCheckInSubmit}
-          isLoading={isClassLoading}
-          hasActiveSession={hasActiveSession}
-          activeSessionName={activeSessionName}
-        />
-      )}
+   {/* Class Check-in Modal */}
+{isAdminTrainer && (
+  <ClassCheckInModal
+    isOpen={showClassModal}
+    onClose={() => setShowClassModal(false)}
+    onCheckIn={handleClassCheckInSubmit}
+    isLoading={isClassLoading}
+    hasActiveSession={hasActiveSession}
+    activeSessionName={activeSessionName}
+    employeeId={employee_id} 
+  />
+)}
     </div>
   );
 };

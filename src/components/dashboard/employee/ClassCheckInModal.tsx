@@ -43,6 +43,7 @@ interface ClassCheckInModalProps {
   isLoading: boolean;
   hasActiveSession?: boolean;
   activeSessionName?: string;
+  employeeId?: string | null;
 }
 
 const ClassCheckInModal: React.FC<ClassCheckInModalProps> = ({
@@ -51,39 +52,48 @@ const ClassCheckInModal: React.FC<ClassCheckInModalProps> = ({
   onCheckIn,
   isLoading,
   hasActiveSession = false,
-  activeSessionName = ''
+  activeSessionName = '',
+  employeeId,
 }) => {
   const [classes, setClasses] = useState<ClassAssignment[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<TodayClassAttendance[]>([]);
   const [fetchingClasses, setFetchingClasses] = useState(false);
   const { toast } = useToast();
 
-  const fetchAssignedClasses = async () => {
-    setFetchingClasses(true);
-    try {
-      const response = await fetch('/api/attendance/class-checkin', {
-        method: 'GET',
-        credentials: 'include',
-      });
+const fetchAssignedClasses = async () => {
+  setFetchingClasses(true);
+  try {
+    // Include employeeId in the request
+    const url = employeeId 
+      ? `/api/attendance/class-checkin?employee_id=${employeeId}`
+      : '/api/attendance/class-checkin';
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+    });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch assigned classes');
-      }
-
-      const data = await response.json();
-      setClasses(data.assignments || []);
-      setTodayAttendance(data.todayAttendance || []);
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load your assigned classes',
-        variant: 'destructive',
-      });
-    } finally {
-      setFetchingClasses(false);
+    if (!response.ok) {
+      throw new Error('Failed to fetch assigned classes');
     }
-  };
+
+    const data = await response.json();
+    
+    
+    // The class-checkin endpoint returns assignments, not classes
+    setClasses(data.assignments || []);
+    setTodayAttendance(data.todayAttendance || []);
+  } catch (error) {
+    console.error('Error fetching classes:', error);
+    toast({
+      title: 'Error',
+      description: 'Failed to load your assigned classes',
+      variant: 'destructive',
+    });
+  } finally {
+    setFetchingClasses(false);
+  }
+};
 
   useEffect(() => {
     if (isOpen) {
