@@ -9,48 +9,95 @@ datasource db {
 
 model Users {
   id            Int         @id @default(autoincrement())
+  organization_id Int       // NEW: Link to organization
   name          String      @db.VarChar(100)
-  id_number     String      @unique @db.VarChar(50)
+  id_number     String      @unique @db.VarChar(50)              
   role          String      @db.VarChar(20)
   phone_number  String      @db.VarChar(20)
-  department    String?      @db.VarChar(20)
+  department    String?     @db.VarChar(20)
   gender        String      @db.VarChar(10)
-  email         String?       @unique @db.VarChar(100)
+  email         String?     @unique @db.VarChar(100)             
   is_active     Boolean     @default(true)
   created_at    DateTime    @default(now())
   updated_at    DateTime    @updatedAt
   created_by    String      @db.VarChar(100) 
-  Employee      Employees?  // One-to-one relation with Employees
-  webAuthnCredentials WebAuthnCredentials[]
-  LoginLogs     LoginLogs[] 
+  
+  // Relations
+  organization                Organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Employee                    Employees?
+  webAuthnCredentials         WebAuthnCredentials[]
+  LoginLogs                   LoginLogs[] 
   webAuthnCredentialChallenge WebAuthnCredentialChallenge?
-  trainerClassAssignments TrainerClassAssignments[]
-  classAttendance         ClassAttendance[]
-  biometricEnrollments    BiometricEnrollments[]
-  biometricLogs           BiometricLogs[]
+  trainerClassAssignments     TrainerClassAssignments[]
+  classAttendance             ClassAttendance[]
+  biometricEnrollments        BiometricEnrollments[]
+  biometricLogs               BiometricLogs[]
 
+  @@unique([organization_id, id_number])  // Unique within organization
+  @@unique([organization_id, email])      // Unique within organization (if email exists)
   @@map("Users")
-  @@index([id_number])
+  @@index([organization_id])
+  @@index([organization_id, id_number])
+  @@index([organization_id, role])
 }
 
 model Employees {
   id              Int          @id @default(autoincrement())
-  employee_id     Int          @unique  // This will come from Users table id
-  name            String       @db.VarChar(100)  // For verification
-  id_number       String       @db.VarChar(50)   // For verification
-  role            String       @db.VarChar(20)   // For verification
-  email           String       @unique @db.VarChar(100)
+  employee_id     Int          @unique
+  name            String       @db.VarChar(100)
+  id_number       String       @unique @db.VarChar(50)
+  role            String       @db.VarChar(20)
+  email           String       @db.VarChar(100)  // Remove @unique
   password        String       @db.VarChar(255)
   date_of_birth   DateTime     @db.Date
-  id_card_path    String       @db.VarChar(255)  // Path to stored ID card file
-  passport_photo  String       @db.VarChar(255)  // Path to stored passport photo
+  id_card_path    String       @db.VarChar(255)
+  passport_photo  String       @db.VarChar(255)
   created_at      DateTime     @default(now())
   user            Users        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   Attendance      Attendance[]
   LoginLogs       LoginLogs[]
   PasswordReset   PasswordReset[] 
 
-  @@index([id_number, role]) // Index for faster verification lookups
+  @@index([id_number, role])
+}
+
+// NEW: Organizations table for multi-tenancy
+model Organizations {
+  id                    Int      @id @default(autoincrement())
+  name                  String   @db.VarChar(100)               // School/Organization name
+  slug                  String   @unique @db.VarChar(50)        // URL-friendly identifier (abc-school)
+  domain                String?  @unique @db.VarChar(100)       // Custom domain (abcschool.edu)
+  subdomain             String?  @unique @db.VarChar(50)        // Subdomain (abc-school.yourapp.com)
+  logo_url              String?  @db.VarChar(255)               // Logo file path/URL
+  live_db_url           String?  @db.VarChar(500)               // Live database URL for this organization
+
+  // Parent/Child hierarchy for Optimum Systems
+  parent_id             Int?                              // NULL for Optimum Systems, populated for client schools
+  organization_type     String   @default("client") @db.VarChar(20) // "parent", "client"
+
+  // Geolocation settings
+  center_latitude       Decimal? @db.Decimal(10, 8)            // Center latitude for geofencing
+  center_longitude      Decimal? @db.Decimal(11, 8)            // Center longitude for geofencing  
+  max_distance_meters   Int?     @default(50)                  // Maximum allowed distance in meters
+  geofencing_enabled    Boolean  @default(false)               // Enable/disable geofencing for this org
+  
+  is_active             Boolean  @default(true)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  created_by            String   @db.VarChar(100)
+  
+  // Relations - all tables that need tenant isolation
+  parent                Organizations? @relation("OrganizationHierarchy", fields: [parent_id], references: [id])
+  children              Organizations[] @relation("OrganizationHierarchy")
+  users                    Users[]
+  classes                  Classes[]
+  attendanceProcessingLogs AttendanceProcessingLog[]
+  
+  @@map("Organizations")
+  @@index([slug])
+  @@index([domain])
+  @@index([subdomain])
+  @@index([is_active])
 }
 
 model Attendance {
@@ -81,13 +128,17 @@ model PasswordReset {
 
 model AttendanceProcessingLog {
   id                Int      @id @default(autoincrement())
+  organization_id   Int      // ADD THIS
   date              DateTime
   records_processed Int
-  status            String   // 'completed' | 'failed'
+  status            String
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
-  @@unique([date])
+  organization      Organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@unique([organization_id, date])  // Unique per organization
+  @@index([organization_id])
 }
 
 model WebAuthnCredentials {
@@ -147,23 +198,26 @@ model LoginLogs {
 // Classes that trainers can be assigned to
 model Classes {
   id              Int       @id @default(autoincrement())
-  name            String    @db.VarChar(100)        // e.g., "Advanced Mathematics"
-  code            String    @unique @db.VarChar(20)  // e.g., "MATH301"
-  description     String?   @db.Text                 // Optional class description
-  department      String    @db.VarChar(50)          // Department offering the class
-  duration_hours  Int       @default(2)              // Class duration in hours
+  organization_id Int       // ADD THIS
+  name            String    @db.VarChar(100)
+  code            String    @db.VarChar(20)  // Remove @unique
+  description     String?   @db.Text
+  department      String    @db.VarChar(50)
+  duration_hours  Int       @default(2)
   is_active       Boolean   @default(true)
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
   created_by      String    @db.VarChar(100)
   
   // Relations
+  organization       Organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   trainerAssignments TrainerClassAssignments[]
   classAttendance    ClassAttendance[]
 
+  @@unique([organization_id, code])  // Unique per organization
   @@map("Classes")
-  @@index([code])
-  @@index([department])
+  @@index([organization_id])
+  @@index([organization_id, department])
   @@index([is_active])
 }
 

@@ -39,15 +39,6 @@ async function verifyAuth() {
   }
 }
 
-// Resolve employeeId from userId
-async function resolveEmployeeId(userId: number): Promise<number | null> {
-  const employee = await db.employees.findFirst({
-    where: { employee_id: userId },
-    select: { id: true }
-  });
-  return employee ? employee.id : null;
-}
-
 // GET /api/trainers/[id]/assignments - Fetch trainer's current class assignments
 export async function GET(
   request: NextRequest,
@@ -79,16 +70,23 @@ export async function GET(
       );
     }
 
-    // 🔑 Resolve employee.id for this trainer
-    const trainerEmployeeId = await resolveEmployeeId(trainerUserId);
-    if (!trainerEmployeeId) {
-      return NextResponse.json({ error: 'No matching employee found' }, { status: 404 });
-    }
-
-    // Fetch active assignments using employee.id
+    // ✅ Use Users.id directly for class assignments (new schema)
     const assignments = await db.trainerClassAssignments.findMany({
-      where: { trainer_id: trainerEmployeeId, is_active: true },
-      select: { id: true, class_id: true, assigned_at: true }
+      where: { trainer_id: trainerUserId, is_active: true },
+      select: { 
+        id: true, 
+        class_id: true, 
+        assigned_at: true,
+        class: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            department: true,
+            duration_hours: true
+          }
+        }
+      }
     });
 
     return NextResponse.json(assignments);
@@ -129,12 +127,6 @@ export async function POST(
       );
     }
 
-    // 🔑 Resolve employee.id for this trainer
-    const trainerEmployeeId = await resolveEmployeeId(trainerUserId);
-    if (!trainerEmployeeId) {
-      return NextResponse.json({ error: 'No matching employee found' }, { status: 404 });
-    }
-
     const body = await request.json();
     const { class_ids } = body;
 
@@ -149,7 +141,7 @@ export async function POST(
       return numId;
     });
 
-    // Verify trainer exists as a user
+    // ✅ Verify trainer exists as a user (using Users.id directly)
     const trainerUser = await db.users.findUnique({ where: { id: trainerUserId } });
     if (!trainerUser || !trainerUser.is_active) {
       return NextResponse.json({ error: 'Trainer not found or inactive' }, { status: 404 });
@@ -181,9 +173,9 @@ export async function POST(
 
     // Use transaction
     const result = await db.$transaction(async (tx) => {
-      // Deactivate current assignments
+      // ✅ Deactivate current assignments using Users.id
       const deactivatedResult = await tx.trainerClassAssignments.updateMany({
-        where: { trainer_id: trainerEmployeeId, is_active: true },
+        where: { trainer_id: trainerUserId, is_active: true },
         data: { is_active: false }
       });
 
@@ -191,8 +183,9 @@ export async function POST(
 
       // Reactivate or create new
       if (numericClassIds.length > 0) {
+        // ✅ Find existing assignments using Users.id
         const existingAssignments = await tx.trainerClassAssignments.findMany({
-          where: { trainer_id: trainerEmployeeId, class_id: { in: numericClassIds } }
+          where: { trainer_id: trainerUserId, class_id: { in: numericClassIds } }
         });
 
         const existingClassIds = existingAssignments.map(a => a.class_id);
@@ -215,7 +208,7 @@ export async function POST(
         if (newClassIds.length > 0) {
           const createResult = await tx.trainerClassAssignments.createMany({
             data: newClassIds.map(classId => ({
-              trainer_id: trainerEmployeeId,
+              trainer_id: trainerUserId, // ✅ Use Users.id directly
               class_id: classId,
               assigned_by: user.name,
               is_active: true

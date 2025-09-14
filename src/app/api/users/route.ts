@@ -121,16 +121,30 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = createUserSchema.parse(body);
 
+    const currentUser = await db.employees.findFirst({
+      where: { email: decodedToken.email },
+      include: { user: true }
+    });
+
+    if (!currentUser?.user?.organization_id) {
+      return NextResponse.json(
+        { error: "Unable to determine organization" },
+        { status: 400 }
+      );
+    }
+
+
     // Check if user with same ID number already exists
-    const existingUser = await db.users.findUnique({
+     const existingUser = await db.users.findFirst({
       where: {
+        organization_id: currentUser.user.organization_id,
         id_number: validatedData.id_number
       }
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "User with this ID number already exists" },
+        { error: "User with this ID number already exists in this organization" },
         { status: 409 }
       );
     }
@@ -139,6 +153,7 @@ export async function POST(request: Request) {
     const newUser = await db.users.create({
       data: {
         ...validatedData,
+        organization_id: currentUser.user.organization_id,
         created_by: decodedToken.email,
         is_active: true
       }

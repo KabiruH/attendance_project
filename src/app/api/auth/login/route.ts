@@ -64,7 +64,7 @@ async function handlePasswordLogin(body: any, clientIP: string, userAgent: strin
   const validatedData = loginSchema.parse(body);
   
   // Find employee with their user information
-  const employee = await db.employees.findUnique({
+  const employee = await db.employees.findFirst({
     where: { email: validatedData.email },
     select: {
       id: true,
@@ -161,7 +161,7 @@ async function handlePasswordLogin(body: any, clientIP: string, userAgent: strin
 async function handleBiometricLogin(body: any, clientIP: string, userAgent: string) {
   const validatedData = biometricLoginSchema.parse(body);
   
-  const employee = await db.employees.findUnique({
+  const employee = await db.employees.findFirst({
     where: { email: validatedData.email },
     select: {
       id: true,

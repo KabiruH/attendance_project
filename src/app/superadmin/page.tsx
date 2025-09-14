@@ -1,18 +1,15 @@
-// app/dashboard/page.tsx - Updated with SuperAdmin support
+// app/superadmin/page.tsx - Main SuperAdmin dashboard page
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { jwtDecode } from "jwt-decode";
-import { useToast } from '@/components/ui/use-toast';
-import AdminDashboard from '@/components/dashboard/AdminDashboard';
-import EmployeeDashboard from '@/components/dashboard/EmployeeDashboard';
 import SuperAdminDashboard from '@/components/superadmin/SuperAdminDasboard';
 
 interface DecodedToken {
   id: number;
   email: string;
-  role: 'admin' | 'employee' | 'super_admin'; // Add super_admin
+  role: string;
   name: string;
 }
 
@@ -23,16 +20,15 @@ interface UserData {
   role: string;
 }
 
-const Dashboard = () => {
+export default function SuperAdminPage() {
   const router = useRouter();
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkSuperAdminAuth = async () => {
       try {
-        // Get user data from auth endpoint
+        // Check authentication
         const response = await fetch('/api/auth/check', {
           method: 'GET',
           credentials: 'include',
@@ -45,7 +41,13 @@ const Dashboard = () => {
         const data = await response.json();
         const decodedToken: DecodedToken = jwtDecode(data.token);
 
-        // Set the full user data
+        // Check if user is SuperAdmin
+        if (decodedToken.role !== 'super_admin') {
+          // Redirect non-SuperAdmin users to regular dashboard
+          router.push('/dashboard');
+          return;
+        }
+
         setUserData({
           id: decodedToken.id,
           email: decodedToken.email,
@@ -53,33 +55,23 @@ const Dashboard = () => {
           role: decodedToken.role,
         });
 
-        // Redirect SuperAdmin users to SuperAdmin dashboard
-        if (decodedToken.role === 'super_admin') {
-          router.push('/superadmin');
-          return;
-        }
-
       } catch (error) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in again',
-          variant: 'destructive',
-        });
+        console.error('SuperAdmin auth check failed:', error);
         router.push('/login');
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkAuth();
-  }, [router, toast]);
+    checkSuperAdminAuth();
+  }, [router]);
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900"></div>
-          <span className="text-lg">Loading...</span>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
+          <span className="text-lg">Loading SuperAdmin Dashboard...</span>
         </div>
       </div>
     );
@@ -89,13 +81,5 @@ const Dashboard = () => {
     return null; // Router will handle redirect
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {userData.role === 'admin' && <AdminDashboard data={userData} />}
-      {userData.role === 'employee' && <EmployeeDashboard data={userData} />}
-      {/* SuperAdmin users are redirected to /superadmin, so this won't render */}
-    </div>
-  );
-};
-
-export default Dashboard;
+  return <SuperAdminDashboard data={userData} />;
+}
