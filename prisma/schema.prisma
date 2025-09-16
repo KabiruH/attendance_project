@@ -7,220 +7,249 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model attendance {
+model Users {
+  id            Int         @id @default(autoincrement())
+  name          String      @db.VarChar(100)
+  id_number     String      @unique @db.VarChar(50)
+  role          String      @db.VarChar(20)
+  phone_number  String      @db.VarChar(20)
+  department    String?      @db.VarChar(20)
+  gender        String      @db.VarChar(10)
+  email         String?       @unique @db.VarChar(100)
+  is_active     Boolean     @default(true)
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+  created_by    String      @db.VarChar(100) 
+  Employee      Employees?  // One-to-one relation with Employees
+  webAuthnCredentials WebAuthnCredentials[]
+  LoginLogs     LoginLogs[] 
+  webAuthnCredentialChallenge WebAuthnCredentialChallenge?
+  trainerClassAssignments TrainerClassAssignments[]
+  classAttendance         ClassAttendance[]
+  biometricEnrollments    BiometricEnrollments[]
+  biometricLogs           BiometricLogs[]
+
+  @@map("Users")
+  @@index([id_number])
+}
+
+model Employees {
+  id              Int          @id @default(autoincrement())
+  employee_id     Int          @unique  // This will come from Users table id
+  name            String       @db.VarChar(100)  // For verification
+  id_number       String       @db.VarChar(50)   // For verification
+  role            String       @db.VarChar(20)   // For verification
+  email           String       @unique @db.VarChar(100)
+  password        String       @db.VarChar(255)
+  date_of_birth   DateTime     @db.Date
+  id_card_path    String       @db.VarChar(255)  // Path to stored ID card file
+  passport_photo  String       @db.VarChar(255)  // Path to stored passport photo
+  created_at      DateTime     @default(now())
+  user            Users        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  Attendance      Attendance[]
+  LoginLogs       LoginLogs[]
+  PasswordReset   PasswordReset[] 
+
+  @@index([id_number, role]) // Index for faster verification lookups
+}
+
+model Attendance {
   id             Int       @id @default(autoincrement())
-  employee_id    Int
+  employee_id    Int       
   date           DateTime  @db.Date
   check_in_time  DateTime?
   check_out_time DateTime?
   sessions       Json?
   status         String    @default("Absent") @db.VarChar(10)
-  employees      employees @relation(fields: [employee_id], references: [id], map: "Attendance_employee_id_fkey")
+  Employees      Employees @relation(fields: [employee_id], references: [id])
 
-  @@unique([employee_id, date], map: "Attendance_employee_id_date_key")
+  @@unique([employee_id, date])
 }
 
-model attendanceprocessinglog {
-  id                Int      @id @default(autoincrement())
-  date              DateTime @unique(map: "AttendanceProcessingLog_date_key")
-  records_processed Int
-  status            String
-  created_at        DateTime @default(now())
-  updated_at        DateTime
-}
-
-model biometricenrollments {
-  id             Int      @id @default(autoincrement())
-  user_id        Int
-  biometric_hash String   @db.Text
-  enrolled_at    DateTime @default(now())
-  device_info    Json?
-  ip_address     String?  @db.VarChar(45)
-  user_agent     String?  @db.Text
-  is_active      Boolean  @default(true)
-  created_at     DateTime @default(now())
-  updated_at     DateTime
-  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "BiometricEnrollments_user_id_fkey")
-
-  @@index([user_id], map: "BiometricEnrollments_user_id_idx")
-  @@index([user_id, is_active], map: "BiometricEnrollments_user_id_is_active_idx")
-}
-
-model biometriclogs {
-  id         Int      @id @default(autoincrement())
-  user_id    Int
-  action     String   @db.VarChar(50)
-  status     String   @db.VarChar(20)
-  ip_address String?  @db.VarChar(45)
-  user_agent String?  @db.Text
-  timestamp  DateTime @default(now())
-  details    Json?
-  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "BiometricLogs_user_id_fkey")
-
-  @@index([action], map: "BiometricLogs_action_idx")
-  @@index([status], map: "BiometricLogs_status_idx")
-  @@index([timestamp], map: "BiometricLogs_timestamp_idx")
-  @@index([user_id], map: "BiometricLogs_user_id_idx")
-}
-
-model classattendance {
-  id                 Int       @id @default(autoincrement())
-  trainer_id         Int
-  class_id           Int
-  date               DateTime  @db.Date
-  check_in_time      DateTime
-  check_out_time     DateTime?
-  status             String    @default("Present") @db.VarChar(20)
-  auto_checkout      Boolean   @default(false)
-  work_attendance_id Int?
-  created_at         DateTime  @default(now())
-  classes            classes   @relation(fields: [class_id], references: [id], onDelete: Cascade, map: "ClassAttendance_class_id_fkey")
-  users              users     @relation(fields: [trainer_id], references: [id], onDelete: Cascade, map: "ClassAttendance_trainer_id_fkey")
-
-  @@unique([trainer_id, class_id, date], map: "ClassAttendance_trainer_id_class_id_date_key")
-  @@index([auto_checkout], map: "ClassAttendance_auto_checkout_idx")
-  @@index([check_in_time], map: "ClassAttendance_check_in_time_idx")
-  @@index([class_id], map: "ClassAttendance_class_id_idx")
-  @@index([date], map: "ClassAttendance_date_idx")
-  @@index([trainer_id], map: "ClassAttendance_trainer_id_idx")
-}
-
-model classes {
-  id                      Int                       @id @default(autoincrement())
-  name                    String                    @db.VarChar(100)
-  code                    String                    @unique(map: "Classes_code_key") @db.VarChar(20)
-  description             String?                   @db.Text
-  department              String                    @db.VarChar(50)
-  duration_hours          Int                       @default(2)
-  is_active               Boolean                   @default(true)
-  created_at              DateTime                  @default(now())
-  updated_at              DateTime
-  created_by              String                    @db.VarChar(100)
-  classattendance         classattendance[]
-  trainerclassassignments trainerclassassignments[]
-
-  @@index([code], map: "Classes_code_idx")
-  @@index([department], map: "Classes_department_idx")
-  @@index([is_active], map: "Classes_is_active_idx")
-}
-
-model employees {
-  id             Int             @id @default(autoincrement())
-  employee_id    Int             @unique(map: "Employees_employee_id_key")
-  name           String          @db.VarChar(100)
-  id_number      String          @db.VarChar(50)
-  role           String          @db.VarChar(20)
-  email          String          @unique(map: "Employees_email_key") @db.VarChar(100)
-  password       String          @db.VarChar(255)
-  date_of_birth  DateTime        @db.Date
-  id_card_path   String          @db.VarChar(255)
-  passport_photo String          @db.VarChar(255)
-  created_at     DateTime        @default(now())
-  attendance     attendance[]
-  users          users           @relation(fields: [employee_id], references: [id], onDelete: Cascade, map: "Employees_employee_id_fkey")
-  loginlogs      loginlogs[]
-  passwordreset  passwordreset[]
-
-  @@index([id_number, role], map: "Employees_id_number_role_idx")
-}
-
-model loginlogs {
-  id               Int        @id @default(autoincrement())
-  user_id          Int?
-  employee_id      Int?
-  email            String     @db.VarChar(100)
-  ip_address       String     @db.VarChar(45)
-  user_agent       String     @db.Text
-  status           String     @db.VarChar(20)
-  failure_reason   String?    @db.VarChar(100)
-  login_method     String     @db.VarChar(20)
-  session_duration Int?
-  attempted_at     DateTime   @default(now())
-  employees        employees? @relation(fields: [employee_id], references: [id], map: "LoginLogs_employee_id_fkey")
-  users            users?     @relation(fields: [user_id], references: [id], map: "LoginLogs_user_id_fkey")
-
-  @@index([attempted_at], map: "LoginLogs_attempted_at_idx")
-  @@index([email], map: "LoginLogs_email_idx")
-  @@index([employee_id], map: "LoginLogs_employee_id_idx")
-  @@index([ip_address], map: "LoginLogs_ip_address_idx")
-  @@index([status], map: "LoginLogs_status_idx")
-  @@index([user_id], map: "LoginLogs_user_id_idx")
-}
-
-model passwordreset {
-  id          Int       @id @default(autoincrement())
-  employee_id Int
-  token       String    @unique(map: "PasswordReset_token_key")
-  expires     DateTime
-  used        Boolean   @default(false)
-  created_at  DateTime  @default(now())
-  employees   employees @relation(fields: [employee_id], references: [id], map: "PasswordReset_employee_id_fkey")
-
-  @@index([employee_id], map: "PasswordReset_employee_id_fkey")
-  @@index([token], map: "PasswordReset_token_idx")
-}
-
-model trainerclassassignments {
-  id          Int      @id @default(autoincrement())
-  trainer_id  Int
-  class_id    Int
-  assigned_at DateTime @default(now())
-  is_active   Boolean  @default(true)
-  assigned_by String   @db.VarChar(100)
-  classes     classes  @relation(fields: [class_id], references: [id], onDelete: Cascade, map: "TrainerClassAssignments_class_id_fkey")
-  users       users    @relation(fields: [trainer_id], references: [id], onDelete: Cascade, map: "TrainerClassAssignments_trainer_id_fkey")
-
-  @@unique([trainer_id, class_id], map: "TrainerClassAssignments_trainer_id_class_id_key")
-  @@index([class_id], map: "TrainerClassAssignments_class_id_idx")
-  @@index([is_active], map: "TrainerClassAssignments_is_active_idx")
-  @@index([trainer_id], map: "TrainerClassAssignments_trainer_id_idx")
-}
-
-model users {
-  id                          Int                          @id @default(autoincrement())
-  name                        String                       @db.VarChar(100)
-  id_number                   String                       @unique(map: "Users_id_number_key") @db.VarChar(50)
-  role                        String                       @db.VarChar(20)
-  phone_number                String                       @db.VarChar(20)
-  department                  String?                      @db.VarChar(20)
-  gender                      String                       @db.VarChar(10)
-  email                       String?                      @unique(map: "Users_email_key") @db.VarChar(100)
-  is_active                   Boolean                      @default(true)
-  created_at                  DateTime                     @default(now())
-  updated_at                  DateTime
-  created_by                  String                       @db.VarChar(100)
-  biometricenrollments        biometricenrollments[]
-  biometriclogs               biometriclogs[]
-  classattendance             classattendance[]
-  employees                   employees?
-  loginlogs                   loginlogs[]
-  trainerclassassignments     trainerclassassignments[]
-  webauthncredentialchallenge webauthncredentialchallenge?
-  webauthncredentials         webauthncredentials[]
-
-  @@index([id_number], map: "Users_id_number_idx")
-}
-
-model webauthncredentialchallenge {
-  userId    Int      @id
-  challenge String   @db.Text
-  expires   DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime
-  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade, map: "WebAuthnCredentialChallenge_userId_fkey")
-}
-
-model webauthncredentials {
-  id           String   @id
-  userId       Int
-  email        String?  @db.VarChar(100)
-  credentialId String   @unique(map: "WebAuthnCredentials_credentialId_key")
-  publicKey    String   @db.Text
-  counter      Int
-  transports   String?
+model PasswordReset {
+  id           Int      @id @default(autoincrement())
+  employee_id  Int
+  token        String   @unique
+  expires      DateTime
+  used         Boolean  @default(false)
+  employee     Employees @relation(fields: [employee_id], references: [id])
   created_at   DateTime @default(now())
-  updated_at   DateTime
-  users        users    @relation(fields: [userId], references: [id], onDelete: Cascade, map: "WebAuthnCredentials_userId_fkey")
 
-  @@index([userId], map: "WebAuthnCredentials_userId_fkey")
+  @@map("PasswordReset") 
+  @@index([token])
+}
+
+model AttendanceProcessingLog {
+  id                Int      @id @default(autoincrement())
+  date              DateTime
+  records_processed Int
+  status            String   // 'completed' | 'failed'
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([date])
+}
+
+model WebAuthnCredentials {
+  id              String   @id @default(uuid())
+  userId          Int
+  email           String?  @db.VarChar(100)
+  user            Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId    String   @unique
+  publicKey       String   @db.Text
+  counter         Int
+  transports      String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@map("WebAuthnCredentials")
+}
+
+model WebAuthnCredentialChallenge {
+  userId    Int       @id
+  user      Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge String    @db.Text
+  expires   DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("WebAuthnCredentialChallenge")
+}
+
+// Add this model to your existing schema.prisma file
+
+model LoginLogs {
+  id               Int       @id @default(autoincrement())
+  user_id          Int?      // Links to Users.id - nullable for failed attempts
+  employee_id      Int?      // Links to Employees.id - nullable for failed attempts  
+  email            String    @db.VarChar(100) // Always store email attempted
+  ip_address       String    @db.VarChar(45)  // IPv4/IPv6 support
+  user_agent       String    @db.Text         // Browser/device info
+  status           String    @db.VarChar(20)  // 'success', 'failed', 'blocked'
+  failure_reason   String?   @db.VarChar(100) // Detailed failure reason
+  login_method     String    @db.VarChar(20)  // 'password', 'biometric'
+  session_duration Int?      // In minutes - for successful logins
+  attempted_at     DateTime  @default(now())
+  
+  // Relations
+  user             Users?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  employee         Employees? @relation(fields: [employee_id], references: [id], onDelete: SetNull)
+  
+  @@map("LoginLogs")
+  @@index([user_id])
+  @@index([employee_id])
+  @@index([email])
+  @@index([attempted_at])
+  @@index([status])
+  @@index([ip_address])
+}
+
+// Classes that trainers can be assigned to
+model Classes {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)        // e.g., "Advanced Mathematics"
+  code            String    @unique @db.VarChar(20)  // e.g., "MATH301"
+  description     String?   @db.Text                 // Optional class description
+  department      String    @db.VarChar(50)          // Department offering the class
+  duration_hours  Int       @default(2)              // Class duration in hours
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  created_by      String    @db.VarChar(100)
+  
+  // Relations
+  trainerAssignments TrainerClassAssignments[]
+  classAttendance    ClassAttendance[]
+
+  @@map("Classes")
+  @@index([code])
+  @@index([department])
+  @@index([is_active])
+}
+
+// Separate attendance tracking for classes
+model ClassAttendance {
+  id                Int       @id @default(autoincrement())
+  trainer_id        Int       // References Users.id (employee who is a trainer)
+  class_id          Int       // References Classes.id
+  date              DateTime  @db.Date
+  check_in_time     DateTime
+  check_out_time    DateTime? // Will be auto-set after duration_hours
+  status            String    @default("Present") @db.VarChar(20)
+  auto_checkout     Boolean   @default(false)     // Flag to track if auto-checked out
+  work_attendance_id Int?     // Reference to the work attendance record (optional link)
+  created_at        DateTime  @default(now())
+  
+  // Relations
+  trainer           Users     @relation(fields: [trainer_id], references: [id], onDelete: Cascade)
+  class             Classes   @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  
+  @@unique([trainer_id, class_id, date])  // One check-in per trainer per class per day
+  @@map("ClassAttendance")
+  @@index([trainer_id])
+  @@index([class_id])
+  @@index([date])
+  @@index([check_in_time])
+  @@index([auto_checkout])
+}
+
+// Junction table to assign trainers to classes
+model TrainerClassAssignments {
+  id          Int       @id @default(autoincrement())
+  trainer_id  Int       // References Users.id (where role = 'employee' and assigned to classes)
+  class_id    Int       // References Classes.id
+  assigned_at DateTime  @default(now())
+  is_active   Boolean   @default(true)
+  assigned_by String    @db.VarChar(100)  // Who made the assignment
+  
+  // Relations
+  trainer     Users     @relation(fields: [trainer_id], references: [id], onDelete: Cascade)
+  class       Classes   @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  
+  @@unique([trainer_id, class_id])  // A trainer can only be assigned to a class once
+  @@map("TrainerClassAssignments")
+  @@index([trainer_id])
+  @@index([class_id])
+  @@index([is_active])
+}
+
+// Biometric enrollment tracking for mobile app
+model BiometricEnrollments {
+  id              Int       @id @default(autoincrement())
+  user_id         Int       // References Users.id
+  biometric_hash  String    @db.Text  // Hashed biometric data (for security)
+  enrolled_at     DateTime  @default(now())
+  device_info     Json?     // Store device information
+  ip_address      String?   @db.VarChar(45)
+  user_agent      String?   @db.Text
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  
+  // Relations
+  user            Users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@map("BiometricEnrollments")
+  @@index([user_id])
+  @@index([user_id, is_active])
+}
+
+// Biometric activity logs for security tracking
+model BiometricLogs {
+  id          Int       @id @default(autoincrement())
+  user_id     Int       // References Users.id
+  action      String    @db.VarChar(50)  // 'enrollment', 'authentication', 'deletion'
+  status      String    @db.VarChar(20)  // 'success', 'failed'
+  ip_address  String?   @db.VarChar(45)
+  user_agent  String?   @db.Text
+  timestamp   DateTime  @default(now())
+  details     Json?     // Additional details about the action
+  
+  // Relations
+  user        Users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+    @@map("BiometricLogs")
+  @@index([user_id])
+  @@index([timestamp])
+  @@index([action])
+  @@index([status])
 }
