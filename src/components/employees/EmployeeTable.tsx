@@ -38,7 +38,7 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
   // Helper function to get 5pm cutoff time for a given date
   const getFivePmCutoff = (date: Date): Date => {
     const cutoff = new Date(date);
-    cutoff.setHours(17, 0, 0, 0); // Set to 5:00 PM
+    cutoff.setHours(15, 0, 0, 0); // Set to 5:00 PM
     return cutoff;
   };
 

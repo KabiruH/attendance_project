@@ -1,11 +1,19 @@
-// src/components/auth/LoginForm.tsx - WebAuthn fixes
+// src/components/auth/LoginForm.tsx - Updated to allow login with location warning
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
-import { checkLocation } from '@/lib/geofence';
+import { checkLocationWithDistance } from '@/lib/geofence';
+
+interface LocationResult {
+  isWithinArea: boolean;
+  distanceFromCenter: number;
+  distanceFromEdge: number;
+  userLocation: { latitude: number; longitude: number };
+  formattedDistance: string;
+}
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -14,6 +22,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState(false);
+  const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
   const router = useRouter();
   const { toast } = useToast();
   const biometricButtonRef = useRef<HTMLButtonElement>(null);
@@ -41,21 +50,33 @@ export default function LoginForm() {
     }
   }, []);
 
+  // Check location on component mount
+  useEffect(() => {
+    async function checkUserLocation() {
+      try {
+        const result = await checkLocationWithDistance();
+        setLocationResult(result);
+      } catch (error) {
+        console.error('Error checking location:', error);
+        // Don't block login if location check fails
+      }
+    }
+    
+    checkUserLocation();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const isLocationAllowed = await checkLocation();
-
-      if (!isLocationAllowed) {
+      // Show location warning but don't block login
+      if (locationResult && !locationResult.isWithinArea) {
         toast({
-          title: "Access Denied",
-          description: "You must be within the allowed area to access this application",
-          variant: "destructive"
+          title: "Location Notice",
+          description: `You are ${locationResult.formattedDistance}. You can access the system but will need to be on campus to mark attendance.`,
+          variant: "default"
         });
-        setLoading(false);
-        return;
       }
 
       const response = await fetch('/api/auth/login', {
@@ -63,19 +84,23 @@ export default function LoginForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ 
+          email, 
+          password,
+          locationInfo: locationResult // Include location info for logging/analytics
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
         // Handle specific error from the API response
-        const errorMessage = data.error || 'Login failed';  // If the API sends a specific error
+        const errorMessage = data.error || 'Login failed';
         if (data.error === 'Invalid credentials') {
           toast({
             title: "Error",
             description: "Wrong email or password",
-            variant: "destructive",  // Set the toast to "destructive" for error styling
+            variant: "destructive",
           });
         } else {
           toast({
@@ -87,10 +112,14 @@ export default function LoginForm() {
         throw new Error(errorMessage);
       }
 
-      // Show success message
+      // Show success message with location context
+      const successMessage = locationResult?.isWithinArea 
+        ? "Logged in successfully! You can mark attendance."
+        : "Logged in successfully! Remember to be on campus to mark attendance.";
+
       toast({
         title: "Success!",
-        description: "Logged in successfully",
+        description: successMessage,
       });
 
       // Redirect to dashboard
@@ -120,17 +149,13 @@ const handleBiometricLogin = async () => {
   setBiometricLoading(true);
   
   try {
-    // Check location first
-    const isLocationAllowed = await checkLocation();
-    
-    if (!isLocationAllowed) {
+    // Show location warning but don't block biometric login
+    if (locationResult && !locationResult.isWithinArea) {
       toast({
-        title: "Access Denied",
-        description: "You must be within the allowed area to access this application",
-        variant: "destructive"
+        title: "Location Notice",
+        description: `You are ${locationResult.formattedDistance}. You can access the system but will need to be on campus to mark attendance.`,
+        variant: "default"
       });
-      setBiometricLoading(false);
-      return;
     }
     
     // Find user ID number from email
@@ -205,7 +230,6 @@ const handleBiometricLogin = async () => {
       options.timeout = 60000; // 1 minute
     }
 
-
     // 2. Call WebAuthn
     const authenticationResponse = await startAuthentication({
       optionsJSON: options
@@ -242,6 +266,7 @@ const handleBiometricLogin = async () => {
           id: verificationResult.user.id,  
           email: verificationResult.user.email,
           biometricAuth: true,
+          locationInfo: locationResult, // Include location info
         }),
       });
       
@@ -251,10 +276,14 @@ const handleBiometricLogin = async () => {
         throw new Error(errorData.error || 'Login failed');
       }
       
-      // Show success message
+      // Show success message with location context
+      const successMessage = locationResult?.isWithinArea 
+        ? "Logged in successfully with biometrics! You can mark attendance."
+        : "Logged in successfully with biometrics! Remember to be on campus to mark attendance.";
+      
       toast({
         title: "Success!",
-        description: "Logged in successfully with biometrics",
+        description: successMessage,
       });
       
       // Redirect to dashboard

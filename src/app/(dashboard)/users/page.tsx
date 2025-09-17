@@ -259,15 +259,18 @@ export default function UsersPage() {
                     <SelectItem value="finance">Finance</SelectItem>
                     <SelectItem value="Human Resources">Human Resources</SelectItem>
                     <SelectItem value="Engineering">Engineering</SelectItem>
-                    <SelectItem value="Marketing">Marketing</SelectItem>
-                    <SelectItem value="Sales">Sales</SelectItem>
-                    <SelectItem value="Operations">Operations</SelectItem>
-                    <SelectItem value="Customer Service">Customer Service</SelectItem>
-                    <SelectItem value="Legal">Legal</SelectItem>
-                    <SelectItem value="IT">IT</SelectItem>
                     <SelectItem value="Procurement">Procurement</SelectItem>
                     <SelectItem value="Administration">Administration</SelectItem>
                     <SelectItem value="Executive">Executive</SelectItem>
+                    <SelectItem value="Building and Civil Engineering">Building and Civil Engineering</SelectItem>
+                    <SelectItem value="Electrical and Electronics Engineering">Electrical and Electronics Engineering</SelectItem>
+                    <SelectItem value="Cosmetology">Cosmetology</SelectItem>
+                    <SelectItem value="Fashion Design and Clothing Textile">Fashion Design and Clothing Textile</SelectItem>
+                    <SelectItem value="Business and Liberal Studies">Business and Liberal Studies</SelectItem>
+                    <SelectItem value="Agriculture and Environment Studies">Agriculture and Environment Studies</SelectItem>
+                    <SelectItem value="Automotive and Mechanical Engineering">Automotive and Mechanical Engineering</SelectItem>
+                    <SelectItem value="Hospitality and Institutional Management">Hospitality and Institutional Management</SelectItem>
+
                   </SelectContent>
                 </Select>
               </div>
