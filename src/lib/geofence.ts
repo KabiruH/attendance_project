@@ -14,11 +14,11 @@ interface LocationResult {
 
 // Center point of the allowed area
 const CENTER_COORDINATES: Coordinates = {
-  latitude: -0.0258517, 
-  longitude: 37.65160937687374, 
+  latitude: -0.0283687,  
+  longitude: 37.6573343, 
 };
 
-const MAX_DISTANCE_METERS = 70; // 70m radius
+const MAX_DISTANCE_METERS = 100; // 70m radius
 
 // Haversine formula to calculate distance between two points in meters
 function getDistanceInMeters(
