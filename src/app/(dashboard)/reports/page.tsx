@@ -23,7 +23,7 @@ interface AttendanceSession {
   check_out?: string | null;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 50; // Changed from 10 to 50 as requested
 
 export default function ReportsPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -38,18 +38,43 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Helper function to calculate hours from sessions (same logic as other components)
+  // Helper function to get 6PM cutoff time for a given date
+  const getSixPMCutoff = (date: Date): Date => {
+    const cutoff = new Date(date);
+    cutoff.setHours(18, 0, 0, 0); // 6:00 PM
+    return cutoff;
+  };
+
+  // Helper function to calculate hours from sessions (updated with 6PM cutoff)
   const calculateTotalHoursFromSessions = (sessions: AttendanceSession[]): number => {
     if (!sessions || sessions.length === 0) return 0;
     
+    const currentTime = new Date();
     let totalMinutes = 0;
     
     sessions.forEach(session => {
       if (session.check_in) {
         const checkIn = new Date(session.check_in);
-        const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+        const sixPM = getSixPMCutoff(checkIn);
         
-        const diffInMs = checkOut.getTime() - checkIn.getTime();
+        let effectiveCheckOut: Date;
+        
+        if (session.check_out) {
+          // Use actual check-out time, but cap at 6PM
+          const actualCheckOut = new Date(session.check_out);
+          effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
+        } else {
+          // No check-out time
+          if (currentTime >= sixPM) {
+            // Past 6PM, use 6PM as effective check-out
+            effectiveCheckOut = sixPM;
+          } else {
+            // Before 6PM, use current time
+            effectiveCheckOut = currentTime;
+          }
+        }
+        
+        const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
         const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
         
         totalMinutes += diffInMinutes;
@@ -90,7 +115,7 @@ export default function ReportsPage() {
       const data = await attendanceResponse.json();
   
       if (user.role === "admin") {
-        // FIXED: Include sessions data in admin mapping
+        // Include sessions data in admin mapping
         const processedData = data.attendanceData.map((record: any) => ({
           id: record.id,
           employee_id: record.employee_id,
@@ -98,14 +123,14 @@ export default function ReportsPage() {
           check_in_time: record.check_in_time,
           check_out_time: record.check_out_time,
           status: record.status.toLowerCase(),
-          sessions: record.sessions || [], // ADD THIS LINE - Include sessions data
+          sessions: record.sessions || [], // Include sessions data
           Employees: {
             name: record.Employees?.name || record.employee_name // Handle both possible structures
           }
         }));
         setAttendanceData(processedData);
       } else {
-        // FIXED: Include sessions data in employee mapping
+        // Include sessions data in employee mapping
         const processedData = data.attendanceData.map((record: any) => ({
           id: record.id,
           employee_id: record.employee_id,
@@ -113,7 +138,7 @@ export default function ReportsPage() {
           check_in_time: record.check_in_time,
           check_out_time: record.check_out_time,
           status: record.status.toLowerCase(),
-          sessions: record.sessions || [], // ADD THIS LINE - Include sessions data
+          sessions: record.sessions || [], // Include sessions data
           Employees: {
             name: user.name
           }
@@ -164,11 +189,13 @@ export default function ReportsPage() {
       ...prev,
       [key]: value,
     }));
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
-  // UPDATED: Helper function to calculate hours for export using sessions
+  // UPDATED: Helper function to calculate hours for export with 6PM cutoff
   const calculateHoursForExport = (record: AttendanceRecord): string => {
+    const currentTime = new Date();
+    
     // Use sessions data if available (new format)
     if (record.sessions && Array.isArray(record.sessions) && record.sessions.length > 0) {
       let totalMinutes = 0;
@@ -177,11 +204,27 @@ export default function ReportsPage() {
       record.sessions.forEach((session: AttendanceSession) => {
         if (session.check_in) {
           const checkIn = new Date(session.check_in);
-          const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+          const sixPM = getSixPMCutoff(checkIn);
           
-          if (!session.check_out) hasActiveSession = true;
+          let effectiveCheckOut: Date;
           
-          const diffInMs = checkOut.getTime() - checkIn.getTime();
+          if (session.check_out) {
+            // Use the actual check-out time, but cap it at 6PM
+            const actualCheckOut = new Date(session.check_out);
+            effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
+          } else {
+            // No check-out time
+            if (currentTime >= sixPM) {
+              // Past 6PM, use 6PM as effective check-out
+              effectiveCheckOut = sixPM;
+            } else {
+              // Before 6PM, session is ongoing
+              effectiveCheckOut = currentTime;
+              hasActiveSession = true;
+            }
+          }
+          
+          const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
           const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
           totalMinutes += diffInMinutes;
         }
@@ -190,10 +233,7 @@ export default function ReportsPage() {
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       
-      if (hasActiveSession) {
-        return `${hours}h ${minutes}m *`; // Show ongoing for active sessions
-      }
-      return `${hours}h ${minutes}m`;
+      return hasActiveSession ? `${hours}h ${minutes}m (ongoing)` : `${hours}h ${minutes}m`;
     }
     
     // Fallback to old format
@@ -205,21 +245,48 @@ export default function ReportsPage() {
     
     // Convert to Date objects safely
     const checkIn = record.check_in_time instanceof Date ? record.check_in_time : new Date(record.check_in_time);
-    const checkOut = record.check_out_time 
-      ? (record.check_out_time instanceof Date ? record.check_out_time : new Date(record.check_out_time))
-      : (isToday ? new Date() : null);
+    const sixPM = getSixPMCutoff(checkIn);
     
-    if (!checkOut || isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) return '-';
+    let effectiveCheckOut: Date;
+    let isOngoing = false;
     
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    if (record.check_out_time) {
+      const actualCheckOut = record.check_out_time instanceof Date ? record.check_out_time : new Date(record.check_out_time);
+      effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
+    } else if (isToday) {
+      if (currentTime >= sixPM) {
+        effectiveCheckOut = sixPM;
+      } else {
+        effectiveCheckOut = currentTime;
+        isOngoing = true;
+      }
+    } else {
+      return '-';
+    }
     
-    if (diffInMinutes < 0) return '-';
+    if (!effectiveCheckOut || isNaN(checkIn.getTime()) || isNaN(effectiveCheckOut.getTime())) return '-';
+    
+    const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
     
     const hours = Math.floor(diffInMinutes / 60);
     const minutes = diffInMinutes % 60;
     
-    return `${hours}h ${minutes}m`;
+    return isOngoing ? `${hours}h ${minutes}m (ongoing)` : `${hours}h ${minutes}m`;
+  };
+
+  const formatTimeForCSV = (timeStr: string | Date | null | undefined) => {
+    if (!timeStr) return '-';
+    try {
+      return new Date(timeStr).toLocaleTimeString('en-KE', {
+        timeZone: 'Africa/Nairobi',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return '-';
+    }
   };
 
   const exportToCSV = () => {
@@ -228,10 +295,10 @@ export default function ReportsPage() {
       record.employee_id, 
       record.Employees?.name || '-', 
       record.date, 
-      record.check_in_time || '-', 
-      record.check_out_time || '-', 
+      formatTimeForCSV(record.check_in_time), 
+      formatTimeForCSV(record.check_out_time), 
       record.status,
-      calculateHoursForExport(record) // UPDATED: Use sessions-aware calculation
+      calculateHoursForExport(record) // Uses sessions-aware calculation with 6PM cutoff
     ]);
     
     const csvContent = [
@@ -244,6 +311,22 @@ export default function ReportsPage() {
     link.href = URL.createObjectURL(blob);
     link.download = `attendance_report_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
+  };
+
+  // Helper function to get visible page numbers for pagination
+  const getVisiblePages = () => {
+    const maxVisiblePages = 10;
+    const halfVisible = Math.floor(maxVisiblePages / 2);
+    
+    let startPage = Math.max(1, currentPage - halfVisible);
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Adjust start page if we're near the end
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
   };
 
   // Render the component
@@ -274,31 +357,86 @@ export default function ReportsPage() {
           <PaginationContent>
             <PaginationItem>
               <PaginationPrevious
-                className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className={cn(currentPage === 1 && "pointer-events-none opacity-50 cursor-not-allowed")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (currentPage > 1) {
+                    setCurrentPage(prev => prev - 1);
+                  }
+                }}
                 href="#"
               />
             </PaginationItem>
 
-            {[...Array(totalPages)].map((_, index) => (
-              <PaginationItem key={index + 1}>
+            {/* Show first page if not visible */}
+            {getVisiblePages()[0] > 1 && (
+              <>
+                <PaginationItem>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(1);
+                    }}
+                  >
+                    1
+                  </PaginationLink>
+                </PaginationItem>
+                {getVisiblePages()[0] > 2 && (
+                  <PaginationItem>
+                    <span className="px-4 py-2">...</span>
+                  </PaginationItem>
+                )}
+              </>
+            )}
+
+            {/* Visible page numbers */}
+            {getVisiblePages().map((pageNum) => (
+              <PaginationItem key={pageNum}>
                 <PaginationLink
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    setCurrentPage(index + 1);
+                    setCurrentPage(pageNum);
                   }}
-                  isActive={currentPage === index + 1}
+                  isActive={currentPage === pageNum}
                 >
-                  {index + 1}
+                  {pageNum}
                 </PaginationLink>
               </PaginationItem>
             ))}
 
+            {/* Show last page if not visible */}
+            {getVisiblePages()[getVisiblePages().length - 1] < totalPages && (
+              <>
+                {getVisiblePages()[getVisiblePages().length - 1] < totalPages - 1 && (
+                  <PaginationItem>
+                    <span className="px-4 py-2">...</span>
+                  </PaginationItem>
+                )}
+                <PaginationItem>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(totalPages);
+                    }}
+                  >
+                    {totalPages}
+                  </PaginationLink>
+                  </PaginationItem>
+              </>
+            )}
+
             <PaginationItem>
               <PaginationNext
-                className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className={cn(currentPage === totalPages && "pointer-events-none opacity-50 cursor-not-allowed")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (currentPage < totalPages) {
+                    setCurrentPage(prev => prev + 1);
+                  }
+                }}
                 href="#"
               />
             </PaginationItem>

@@ -101,26 +101,74 @@ const AdminEmployeeTable: React.FC = () => {
     });
   };
 
+  // Helper function to get 6PM cutoff time for the current date
+  const getSixPMCutoff = (date: Date): Date => {
+    const cutoff = new Date(date);
+    cutoff.setHours(18, 0, 0, 0); // 6:00 PM
+    return cutoff;
+  };
+
+  // Helper function to check if a session should be considered ongoing
+  const isSessionOngoing = (session: AttendanceSession, currentTime: Date): boolean => {
+    if (!session.check_in || session.check_out) return false;
+    
+    const checkInTime = new Date(session.check_in);
+    const sixPM = getSixPMCutoff(checkInTime);
+    
+    // If current time is past 6PM on the same day, session should not be ongoing
+    return currentTime < sixPM;
+  };
+
   const hasActiveSession = (attendance: AttendanceRecord): boolean => {
+    const currentTime = new Date();
+    
     if (attendance.sessions && Array.isArray(attendance.sessions)) {
-      return attendance.sessions.some((s: AttendanceSession) => s.check_in && !s.check_out);
+      return attendance.sessions.some((session: AttendanceSession) => 
+        isSessionOngoing(session, currentTime)
+      );
     }
-    return !!(attendance.check_in_time && !attendance.check_out_time);
+    
+    // Fallback to old format
+    if (!attendance.check_in_time || attendance.check_out_time) return false;
+    
+    const checkInTime = new Date(attendance.check_in_time);
+    const sixPM = getSixPMCutoff(checkInTime);
+    
+    return currentTime < sixPM;
   };
 
   const calculateHoursWorked = (attendance: AttendanceRecord): string => {
+    const currentTime = new Date();
+    
     if (attendance.sessions && attendance.sessions.length > 0) {
       let totalMinutes = 0;
-      let hasActiveSession = false;
+      let hasOngoingSession = false;
       
       attendance.sessions.forEach((session: AttendanceSession) => {
         if (session.check_in) {
           const checkIn = new Date(session.check_in);
-          const checkOut = session.check_out ? new Date(session.check_out) : new Date();
+          const sixPM = getSixPMCutoff(checkIn);
           
-          if (!session.check_out) hasActiveSession = true;
+          let effectiveCheckOut: Date;
           
-          const diffInMs = checkOut.getTime() - checkIn.getTime();
+          if (session.check_out) {
+            // Use the actual check-out time, but cap it at 6PM
+            const actualCheckOut = new Date(session.check_out);
+            effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
+          } else {
+            // No check-out time
+            if (currentTime >= sixPM) {
+              // Past 6PM, use 6PM as effective check-out
+              effectiveCheckOut = sixPM;
+            } else {
+              // Before 6PM, session is ongoing
+              effectiveCheckOut = currentTime;
+              hasOngoingSession = true;
+            }
+          }
+          
+          // Calculate minutes worked for this session
+          const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
           const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
           totalMinutes += diffInMinutes;
         }
@@ -129,31 +177,41 @@ const AdminEmployeeTable: React.FC = () => {
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       
-      if (hasActiveSession) {
-        return `${hours}h ${minutes}m *`;
-      }
-      return `${hours}h ${minutes}m`;
+      return hasOngoingSession ? `${hours}h ${minutes}m *` : `${hours}h ${minutes}m`;
     }
     
     // Fallback to old format
     if (!attendance.check_in_time) return '-';
     
     const checkIn = new Date(attendance.check_in_time);
-    const checkOut = attendance.check_out_time ? new Date(attendance.check_out_time) : new Date();
+    const sixPM = getSixPMCutoff(checkIn);
     
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    let effectiveCheckOut: Date;
+    let isOngoing = false;
     
-    if (diffInMinutes < 0) return '-';
+    if (attendance.check_out_time) {
+      // Use the actual check-out time, but cap it at 6PM
+      const actualCheckOut = new Date(attendance.check_out_time);
+      effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
+    } else {
+      // No check-out time
+      if (currentTime >= sixPM) {
+        // Past 6PM, use 6PM as effective check-out
+        effectiveCheckOut = sixPM;
+      } else {
+        // Before 6PM, session is ongoing
+        effectiveCheckOut = currentTime;
+        isOngoing = true;
+      }
+    }
+    
+    const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
     
     const hours = Math.floor(diffInMinutes / 60);
     const minutes = diffInMinutes % 60;
     
-    if (!attendance.check_out_time) {
-      return `${hours}h ${minutes}m *`;
-    }
-    
-    return `${hours}h ${minutes}m`;
+    return isOngoing ? `${hours}h ${minutes}m *` : `${hours}h ${minutes}m`;
   };
 
   const exportToCSV = () => {
@@ -311,7 +369,10 @@ const AdminEmployeeTable: React.FC = () => {
         
         {/* Footer info */}
         <div className="mt-4 text-sm text-gray-500 flex justify-between items-center">
-          <span>* indicates ongoing session</span>
+          <div>
+            <span>* indicates ongoing session</span>
+            <span className="ml-4">Hours capped at 6:00 PM</span>
+          </div>
           <span>Last updated: {new Date().toLocaleTimeString()}</span>
         </div>
       </CardContent>

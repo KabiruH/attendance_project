@@ -26,10 +26,10 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     return <div>No records to display</div>;
   }
 
-  // Helper function to get 5pm cutoff time for a given date
-  const getFivePmCutoff = (date: Date): Date => {
+  // Helper function to get 6PM cutoff time for a given date (updated from 5PM to 6PM)
+  const getSixPMCutoff = (date: Date): Date => {
     const cutoff = new Date(date);
-    cutoff.setHours(17, 0, 0, 0); // Set to 5:00 PM
+    cutoff.setHours(18, 0, 0, 0); // Set to 6:00 PM
     return cutoff;
   };
 
@@ -53,66 +53,86 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     return [];
   };
 
+  // Helper function to check if a session should be considered ongoing
+  const isSessionOngoing = (session: AttendanceSession, currentTime: Date): boolean => {
+    if (!session.check_in || session.check_out) return false;
+    
+    const checkInTime = new Date(session.check_in);
+    const sixPM = getSixPMCutoff(checkInTime);
+    
+    // If current time is past 6PM on the same day, session should not be ongoing
+    return currentTime < sixPM;
+  };
+
   // Helper function to check if record has active session
   const hasActiveSession = (record: AttendanceRecord): boolean => {
+    const currentTime = new Date();
     const sessions = parseSessionsFromData(record);
     
     // Check for active session in sessions data
     if (sessions.length > 0) {
       return sessions.some((session: AttendanceSession) => 
-        session.check_in && !session.check_out
+        isSessionOngoing(session, currentTime)
       );
     }
     
-    return false;
+    // Fallback to old format
+    const recordDate = new Date(record.date).toDateString();
+    const today = new Date().toDateString();
+    const isToday = recordDate === today;
+    
+    if (!record.check_in_time || record.check_out_time || !isToday) return false;
+    
+    const checkInTime = new Date(record.check_in_time);
+    const sixPM = getSixPMCutoff(checkInTime);
+    
+    return currentTime < sixPM;
   };
 
-  // UPDATED: Function to calculate hours worked with 5pm auto-stop
+  // UPDATED: Function to calculate hours worked with 6PM auto-stop
   const calculateHoursWorked = (record: AttendanceRecord): string => {
+    const currentTime = new Date();
     const sessions = parseSessionsFromData(record);
     
     // If sessions data exists, use that (new format)
     if (sessions.length > 0) {
       let totalMinutes = 0;
-      let hasActiveSession = false;
+      let hasOngoingSession = false;
       
       sessions.forEach((session: AttendanceSession) => {
         if (session.check_in) {
           const checkIn = new Date(session.check_in);
-          let checkOut: Date;
+          const sixPM = getSixPMCutoff(checkIn);
+          
+          let effectiveCheckOut: Date;
           
           if (session.check_out) {
-            checkOut = new Date(session.check_out);
+            // Use the actual check-out time, but cap it at 6PM
+            const actualCheckOut = new Date(session.check_out);
+            effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
           } else {
-            // No check out - use current time but cap at 5pm
-            hasActiveSession = true;
-            checkOut = new Date();
+            // No check-out time
+            if (currentTime >= sixPM) {
+              // Past 6PM, use 6PM as effective check-out
+              effectiveCheckOut = sixPM;
+            } else {
+              // Before 6PM, session is ongoing
+              effectiveCheckOut = currentTime;
+              hasOngoingSession = true;
+            }
           }
           
-          // Get 5pm cutoff for the check-in date
-          const fivePmCutoff = getFivePmCutoff(checkIn);
-          
-          // If check-out time is after 5pm, cap it at 5pm
-          if (checkOut > fivePmCutoff) {
-            checkOut = fivePmCutoff;
-          }
-          
-          // Only calculate if check-out is after check-in
-          if (checkOut > checkIn) {
-            const diffInMs = checkOut.getTime() - checkIn.getTime();
-            const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
-            totalMinutes += diffInMinutes;
-          }
+          // Calculate minutes worked for this session
+          const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
+          const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+          totalMinutes += diffInMinutes;
         }
       });
       
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       
-      if (hasActiveSession) {
-        return `${hours}h ${minutes}m *`; // Show ongoing for active sessions
-      }
-      return `${hours}h ${minutes}m`;
+      return hasOngoingSession ? `${hours}h ${minutes}m *` : `${hours}h ${minutes}m`;
     }
     
     // Fallback to old format for backward compatibility
@@ -128,42 +148,39 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     const isToday = recordDate === today;
     
     const checkIn = new Date(checkInStr);
-    let checkOut: Date;
+    const sixPM = getSixPMCutoff(checkIn);
+    
+    let effectiveCheckOut: Date;
+    let isOngoing = false;
     
     if (checkOutStr) {
-      checkOut = new Date(checkOutStr);
+      // Use the actual check-out time, but cap it at 6PM
+      const actualCheckOut = new Date(checkOutStr);
+      effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
     } else if (isToday) {
-      // If not checked out yet and it's today, use current time
-      checkOut = new Date();
+      // If not checked out yet and it's today
+      if (currentTime >= sixPM) {
+        // Past 6PM, use 6PM as effective check-out
+        effectiveCheckOut = sixPM;
+      } else {
+        // Before 6PM, session is ongoing
+        effectiveCheckOut = currentTime;
+        isOngoing = true;
+      }
     } else {
       return '-';
     }
     
-    // Get 5pm cutoff for the check-in date
-    const fivePmCutoff = getFivePmCutoff(checkIn);
-    
-    // If check-out time is after 5pm, cap it at 5pm
-    if (checkOut > fivePmCutoff) {
-      checkOut = fivePmCutoff;
-    }
-    
     // Only calculate if check-out is after check-in
-    if (checkOut <= checkIn) return '-';
+    if (effectiveCheckOut <= checkIn) return '-';
     
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMinutes < 0) return '-';
+    const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
     
     const hours = Math.floor(diffInMinutes / 60);
     const minutes = diffInMinutes % 60;
     
-    // If it's today and no checkOut, show it's ongoing
-    if (!record.check_out_time && isToday) {
-      return `${hours}h ${minutes}m *`;
-    }
-    
-    return `${hours}h ${minutes}m`;
+    return isOngoing ? `${hours}h ${minutes}m *` : `${hours}h ${minutes}m`;
   };
 
   // UPDATED: Function to get hours worked styling using sessions
@@ -188,6 +205,31 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
     }
   };
 
+  const formatTime = (timeStr: string | Date | null | undefined) => {
+    if (!timeStr) return '-';
+    try {
+      return new Date(timeStr).toLocaleTimeString('en-KE', {
+        timeZone: 'Africa/Nairobi',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return '-';
+    }
+  };
+
+  const formatDate = (dateStr: string | Date | undefined) => {
+    if (!dateStr) return '-';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-KE', {
+        timeZone: 'Africa/Nairobi'
+      });
+    } catch {
+      return typeof dateStr === 'string' ? dateStr : '-';
+    }
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -207,17 +249,9 @@ const ReportsTable: React.FC<ReportsTableProps> = ({ data }) => {
             <TableRow key={record.id}>
               <TableCell className="font-medium">{record.employee_id}</TableCell>
               <TableCell>{record.Employees?.name || '-'}</TableCell>
-              <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
-              <TableCell>
-                {record.check_in_time
-                  ? new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '-'}
-              </TableCell>
-              <TableCell>
-                {record.check_out_time
-                  ? new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '-'}
-              </TableCell>
+              <TableCell>{formatDate(record.date)}</TableCell>
+              <TableCell>{formatTime(record.check_in_time)}</TableCell>
+              <TableCell>{formatTime(record.check_out_time)}</TableCell>
               <TableCell>
                 <Badge className={getStatusColor(record.status)}>
                   {record.status.charAt(0).toUpperCase() + record.status.slice(1)}

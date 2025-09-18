@@ -118,7 +118,7 @@ export default function LoginPage() {
         </div>
         <div>
           <p className="text-blue-200 text-sm">
-            © 2025 Mukiria Technical Training College. All rights reserved.
+            © 2025 Mukiria Technical Training Institute. All rights reserved.
           </p>
         </div>
       </div>

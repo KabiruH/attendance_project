@@ -18,7 +18,7 @@ interface AttendanceSession {
 }
 
 const ATTENDANCE_RULES = {
-  AUTO_CHECKOUT: 17,       // 5 PM - automatic checkout time
+  AUTO_CHECKOUT: 15,       // 5 PM - automatic checkout time
   CLASS_DURATION_HOURS: 2, // 2 hours - automatic class checkout after this duration
 };
 
@@ -253,7 +253,7 @@ export async function processAutomaticAttendance() {
               },
           });
 
-          const checkoutTime = new Date(currentDate + 'T17:00:00');
+          const checkoutTime = new Date(currentDate + 'T15:00:00');
 
           // Process each work checkout with session tracking
           for (const record of pendingCheckouts) {
@@ -299,7 +299,7 @@ export async function ensureCheckouts() {
 
     // Find all work records from today that haven't been checked out
     // and where it's past 5 PM
-    if (currentHour >= 17) {
+    if (currentHour >= 15) {
       const pendingCheckouts = await db.attendance.findMany({
         where: {
           date: new Date(currentDate),
@@ -311,7 +311,7 @@ export async function ensureCheckouts() {
       });
 
       if (pendingCheckouts.length > 0) {
-        const checkoutTime = new Date(currentDate + 'T17:00:00');
+        const checkoutTime = new Date(currentDate + 'T15:00:00');
         
         // Process each checkout with session tracking
         for (const record of pendingCheckouts) {

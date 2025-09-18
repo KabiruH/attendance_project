@@ -1,7 +1,8 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Upload, Download, Settings, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { PlusCircle, Upload, Download, Settings, User, Search, X } from "lucide-react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -45,6 +46,7 @@ export default function ClassesPage() {
     const [user, setUser] = useState<User | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [classes, setClasses] = useState<Class[]>([]);
+    const [searchTerm, setSearchTerm] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -64,6 +66,23 @@ export default function ClassesPage() {
 
     const isAdmin = userRole === 'admin';
     const isTrainer = userRole === 'employee'; // All employees can potentially be trainers
+
+    // Filtered classes based on search term
+    const filteredClasses = useMemo(() => {
+        if (!searchTerm.trim()) return classes;
+        
+        const term = searchTerm.toLowerCase();
+        return classes.filter(classItem => 
+            classItem.name.toLowerCase().includes(term) ||
+            classItem.code.toLowerCase().includes(term) ||
+            classItem.department.toLowerCase().includes(term)
+        );
+    }, [classes, searchTerm]);
+
+    // Clear search function
+    const clearSearch = () => {
+        setSearchTerm('');
+    };
 
     // Fetch current user using your auth pattern
     useEffect(() => {
@@ -101,17 +120,34 @@ export default function ClassesPage() {
 
     // Fetch classes on component mount
     useEffect(() => {
-        if (userRole && isAdmin) {
-            fetchClasses();
-        } else if (userRole) {
-            setIsLoading(false);
+        if (userRole) {
+            if (isAdmin) {
+                fetchClasses(); // Admin fetches all classes directly
+            } else {
+                // For employees, just set loading to false - ClassSelection handles its own data
+                setIsLoading(false);
+            }
         }
     }, [userRole, isAdmin]);
 
-    // API Functions (Admin only)
+    // API Functions
     const fetchClasses = async () => {
         try {
             const response = await fetch('/api/classes');
+            if (!response.ok) throw new Error('Failed to fetch classes');
+            const data = await response.json();
+            setClasses(data);
+        } catch (error) {
+            console.error('Error fetching classes:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // API Functions for employees (fetch only active classes)
+    const fetchActiveClasses = async () => {
+        try {
+            const response = await fetch('/api/classes?active_only=true');
             if (!response.ok) throw new Error('Failed to fetch classes');
             const data = await response.json();
             setClasses(data);
@@ -291,6 +327,12 @@ export default function ClassesPage() {
         setRefreshClassSelection(prev => prev + 1);
     };
 
+    // For employees, we get classes from the ClassSelection component instead
+    const handleClassesLoaded = (loadedClasses: Class[]) => {
+        setClasses(loadedClasses);
+        setIsLoading(false);
+    };
+
     if (isLoading || !userRole || !user) {
         return (
             <div className="flex justify-center items-center min-h-screen">
@@ -341,6 +383,36 @@ export default function ClassesPage() {
                     </TabsList>
 
                     <TabsContent value="manage" className="space-y-6">
+                        {/* Search Section */}
+                        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                <Input
+                                    placeholder="Search by class name, code, or department..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-10 pr-10"
+                                />
+                                {searchTerm && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={clearSearch}
+                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0 hover:bg-gray-200"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </Button>
+                                )}
+                            </div>
+                            
+                            {/* Results count */}
+                            {searchTerm && (
+                                <div className="text-sm text-gray-500">
+                                    {filteredClasses.length} of {classes.length} classes found
+                                </div>
+                            )}
+                        </div>
+
                         {/* Admin Controls */}
                         <div className="flex justify-end gap-2">
                             <Button
@@ -364,12 +436,30 @@ export default function ClassesPage() {
                             </Button>
                         </div>
 
+                        {/* No results message */}
+                        {searchTerm && filteredClasses.length === 0 && (
+                            <div className="text-center py-8 text-gray-500">
+                                <Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                                <p className="text-lg font-medium">No classes found</p>
+                                <p className="text-sm">Try adjusting your search terms</p>
+                                <Button
+                                    variant="outline"
+                                    onClick={clearSearch}
+                                    className="mt-3"
+                                >
+                                    Clear search
+                                </Button>
+                            </div>
+                        )}
+
                         {/* Classes Table */}
-                        <ClassesTable
-                            classes={classes}
-                            onEdit={handleEdit}
-                            onDeactivate={handleDeactivate}
-                        />
+                        {(!searchTerm || filteredClasses.length > 0) && (
+                            <ClassesTable
+                                classes={filteredClasses}
+                                onEdit={handleEdit}
+                                onDeactivate={handleDeactivate}
+                            />
+                        )}
                     </TabsContent>
 
                     <TabsContent value="select" className="space-y-6">
@@ -404,9 +494,42 @@ export default function ClassesPage() {
                     </TabsList>
 
                     <TabsContent value="select" className="space-y-6">
+                        {/* Search Section for Employee - Class Selection */}
+                        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                <Input
+                                    placeholder="Search available classes..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-10 pr-10"
+                                />
+                                {searchTerm && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={clearSearch}
+                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0 hover:bg-gray-200"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </Button>
+                                )}
+                            </div>
+                            
+                            {/* Results count - only show if we have classes data */}
+                            {searchTerm && classes.length > 0 && (
+                                <div className="text-sm text-gray-500">
+                                    {filteredClasses.length} of {classes.length} classes found
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ClassSelection Component - always show, it handles its own search */}
                         <ClassSelection
                             userId={user.id}
                             onSelectionSaved={handleClassSelectionSaved}
+                            searchTerm={searchTerm}
+                            onClassesLoaded={handleClassesLoaded}
                             key={`selection-${refreshClassSelection}`}
                         />
                     </TabsContent>

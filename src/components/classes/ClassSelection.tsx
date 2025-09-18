@@ -1,5 +1,5 @@
 //components/classes/classSelection.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,14 +15,23 @@ interface Class {
   department: string;
   duration_hours: number;
   is_active: boolean;
+  created_at: string;
+  created_by: string;
 }
 
 interface ClassSelectionProps {
   userId: number;
-  onSelectionSaved?: () => void; // Changed from onSelectionChange
+  onSelectionSaved?: () => void;
+  searchTerm?: string; // Add search support
+  onClassesLoaded?: (classes: Class[]) => void; // Callback to send classes to parent
 }
 
-export default function ClassSelection({ userId, onSelectionSaved }: ClassSelectionProps) {
+export default function ClassSelection({ 
+  userId, 
+  onSelectionSaved, 
+  searchTerm = '',
+  onClassesLoaded 
+}: ClassSelectionProps) {
   const [availableClasses, setAvailableClasses] = useState<Class[]>([]);
   const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
   const [savedClassIds, setSavedClassIds] = useState<number[]>([]); // Track what's actually saved
@@ -31,10 +40,29 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Filter classes based on search term
+  const filteredClasses = useMemo(() => {
+    if (!searchTerm.trim()) return availableClasses;
+    
+    const term = searchTerm.toLowerCase();
+    return availableClasses.filter(classItem => 
+      classItem.name.toLowerCase().includes(term) ||
+      classItem.code.toLowerCase().includes(term) ||
+      classItem.department.toLowerCase().includes(term)
+    );
+  }, [availableClasses, searchTerm]);
+
   // Fetch available classes and user's current assignments
   useEffect(() => {
     fetchClassesAndAssignments();
   }, [userId]);
+
+  // Send classes to parent when they're loaded
+  useEffect(() => {
+    if (availableClasses.length > 0) {
+      onClassesLoaded?.(availableClasses);
+    }
+  }, [availableClasses, onClassesLoaded]);
 
   const fetchClassesAndAssignments = async () => {
     try {
@@ -45,16 +73,26 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
       if (!classesResponse.ok) throw new Error('Failed to fetch classes');
       const classes = await classesResponse.json();
       
-      // Fetch user's current assignments
-      const assignmentsResponse = await fetch(`/api/trainers/${userId}/assignments`);
-      if (!assignmentsResponse.ok) throw new Error('Failed to fetch assignments');
-      const assignments = await assignmentsResponse.json();
+      let assignedClassIds: number[] = [];
       
-      const assignedClassIds = assignments.map((assignment: any) => assignment.class_id);
+      // Try to fetch user's current assignments, but don't fail if it doesn't work
+      try {
+        const assignmentsResponse = await fetch(`/api/trainers/${userId}/assignments`);
+        if (assignmentsResponse.ok) {
+          const assignments = await assignmentsResponse.json();
+          assignedClassIds = assignments.map((assignment: any) => assignment.class_id);
+        } else {
+          console.warn(`Failed to fetch assignments for user ${userId}: ${assignmentsResponse.status}`);
+          // Continue with empty assignments - user can still select classes
+        }
+      } catch (assignmentError) {
+        console.warn('Error fetching assignments:', assignmentError);
+        // Continue with empty assignments - user can still select classes
+      }
       
       setAvailableClasses(classes);
-      setSelectedClassIds(assignedClassIds); // Current UI state matches saved state
-      setSavedClassIds(assignedClassIds); // Track what's actually saved
+      setSelectedClassIds(assignedClassIds); // Will be empty array if assignments failed
+      setSavedClassIds(assignedClassIds); // Will be empty array if assignments failed
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load data');
     } finally {
@@ -132,12 +170,18 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
           <p className="text-muted-foreground">
             Choose the classes you want to teach. You can check attendance only for selected classes.
           </p>
+          {searchTerm && (
+            <p className="text-sm text-blue-600 mt-1">
+              Showing {filteredClasses.length} of {availableClasses.length} classes for "{searchTerm}"
+            </p>
+          )}
         </div>
         <div className="text-sm text-muted-foreground">
           {selectedClassIds.length} of {availableClasses.length} classes selected
         </div>
       </div>
-       {availableClasses.length > 0 && (
+
+      {filteredClasses.length > 0 && (
         <div className="flex justify-end pt-4 border-t">
           <Button 
             onClick={handleSaveSelections}
@@ -163,7 +207,7 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
 
       {/* Classes Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {availableClasses.map((classItem) => {
+        {filteredClasses.map((classItem) => {
           const isSelected = selectedClassIds.includes(classItem.id);
           const isAlreadySaved = savedClassIds.includes(classItem.id);
           const isNewlySelected = isSelected && !isAlreadySaved;
@@ -228,6 +272,16 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
         })}
       </div>
 
+      {/* Handle case when search returns no results */}
+      {searchTerm && filteredClasses.length === 0 && availableClasses.length > 0 && (
+        <div className="text-center py-10 text-muted-foreground">
+          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>No classes match your search for "{searchTerm}"</p>
+          <p className="text-sm">Try adjusting your search terms</p>
+        </div>
+      )}
+
+      {/* Handle case when no classes available at all */}
       {availableClasses.length === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -237,7 +291,7 @@ export default function ClassSelection({ userId, onSelectionSaved }: ClassSelect
       )}
 
       {/* Save Button */}
-      {availableClasses.length > 0 && (
+      {filteredClasses.length > 0 && (
         <div className="flex justify-end pt-4 border-t">
           <Button 
             onClick={handleSaveSelections}

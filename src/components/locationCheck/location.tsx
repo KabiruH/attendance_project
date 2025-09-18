@@ -159,7 +159,7 @@ export default function LocationCheck({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      <AlertDialog open={showLocationPrompt}>
+      {/* <AlertDialog open={showLocationPrompt}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -176,7 +176,7 @@ export default function LocationCheck({ children }: { children: React.ReactNode 
             <AlertDialogAction onClick={handleAllowLocation}>Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog> */}
 
       {(!checkFailed || isDevEnvironment) && children}
     </>

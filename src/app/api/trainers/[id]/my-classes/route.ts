@@ -39,15 +39,6 @@ async function verifyAuth() {
   }
 }
 
-// Resolve employeeId from userId
-async function resolveEmployeeId(userId: number): Promise<number | null> {
-  const employee = await db.employees.findFirst({
-    where: { employee_id: userId },
-    select: { id: true }
-  });
-  return employee ? employee.id : null;
-}
-
 // GET /api/trainers/[id]/my-classes - Fetch trainer's assigned classes with attendance info
 export async function GET(
   request: NextRequest,
@@ -79,16 +70,10 @@ export async function GET(
       );
     }
 
-    // 🔑 Resolve employee.id for this trainer
-    const trainerEmployeeId = await resolveEmployeeId(trainerUserId);
-    if (!trainerEmployeeId) {
-      return NextResponse.json({ error: 'No matching employee found' }, { status: 404 });
-    }
-
-    // Fetch trainer's active class assignments with class details and attendance info
+    // Fetch trainer's active class assignments with class details using user.id directly
     const assignments = await db.trainerClassAssignments.findMany({
       where: {
-        trainer_id: trainerEmployeeId,
+        trainer_id: trainerUserId, // Using user.id directly
         is_active: true,
         class: {
           is_active: true // Only show assignments to active classes
@@ -114,10 +99,10 @@ export async function GET(
     // For each assignment, get the latest attendance and total sessions
     const assignmentsWithAttendance = await Promise.all(
       assignments.map(async (assignment) => {
-        // Get the most recent attendance for this class
+        // Get the most recent attendance for this class (using user.id directly)
         const lastAttendance = await db.classAttendance.findFirst({
           where: {
-            trainer_id: trainerEmployeeId,
+            trainer_id: trainerUserId, // Using user.id directly
             class_id: assignment.class_id
           },
           orderBy: {
@@ -131,10 +116,10 @@ export async function GET(
           }
         });
 
-        // Get total number of sessions for this class
+        // Get total number of sessions for this class (using user.id directly)
         const totalSessions = await db.classAttendance.count({
           where: {
-            trainer_id: trainerEmployeeId,
+            trainer_id: trainerUserId, // Using user.id directly
             class_id: assignment.class_id,
             status: 'Present'
           }

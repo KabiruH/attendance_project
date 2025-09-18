@@ -35,52 +35,64 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({ employees }) => {
     return <div>No records to display</div>;
   }
 
-  // Helper function to get 5pm cutoff time for a given date
-  const getFivePmCutoff = (date: Date): Date => {
+  // Helper function to get 6PM cutoff time for a given date (changed from 5PM to 6PM)
+  const getSixPMCutoff = (date: Date): Date => {
     const cutoff = new Date(date);
-    cutoff.setHours(15, 0, 0, 0); // Set to 5:00 PM
+    cutoff.setHours(18, 0, 0, 0); // Set to 6:00 PM
     return cutoff;
   };
 
   // Helper function to safely parse sessions from data
-const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
-  // If sessions data exists, use it
-  if (employee.sessions && Array.isArray(employee.sessions)) {
-    return employee.sessions.map((session: any) => {
-      // Handle mobile format (check_in_time/check_out_time as strings)
-      if (session.check_in_time || session.check_out_time) {
+  const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
+    // If sessions data exists, use it
+    if (employee.sessions && Array.isArray(employee.sessions)) {
+      return employee.sessions.map((session: any) => {
+        // Handle mobile format (check_in_time/check_out_time as strings)
+        if (session.check_in_time || session.check_out_time) {
+          return {
+            check_in: session.check_in_time,
+            check_out: session.check_out_time
+          };
+        }
+        // Handle web format (check_in/check_out as Date objects or strings)
         return {
-          check_in: session.check_in_time,
-          check_out: session.check_out_time
+          check_in: session.check_in,
+          check_out: session.check_out
         };
-      }
-      // Handle web format (check_in/check_out as Date objects or strings)
-      return {
-        check_in: session.check_in,
-        check_out: session.check_out
-      };
-    });
-  }
-  
-  // Fallback: Convert old format to sessions format
-  if (employee.timeIn) {
-    return [{
-      check_in: employee.timeIn,
-      check_out: employee.timeOut
-    }];
-  }
-  
-  return [];
-};
+      });
+    }
+    
+    // Fallback: Convert old format to sessions format
+    if (employee.timeIn) {
+      return [{
+        check_in: employee.timeIn,
+        check_out: employee.timeOut
+      }];
+    }
+    
+    return [];
+  };
+
+  // Helper function to check if a session should be considered ongoing
+  const isSessionOngoing = (session: AttendanceSession, currentTime: Date): boolean => {
+    if (!session.check_in || session.check_out) return false;
+    
+    const checkInTime = new Date(session.check_in);
+    const sixPM = getSixPMCutoff(checkInTime);
+    
+    // If current time is past 6PM on the same day, session should not be ongoing
+    return currentTime < sixPM;
+  };
 
   // Helper function to check if employee has active session
   const hasActiveSession = (employee: Employee): boolean => {
+    const currentTime = new Date();
     const sessions = parseSessionsFromData(employee);
     
     // Check for active session in sessions data
     if (sessions.length > 0) {
       return sessions.some((session: AttendanceSession) => 
-        session.check_in && !session.check_out
+        isSessionOngoing(session, currentTime)
       );
     }
     
@@ -89,55 +101,58 @@ const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
     const today = new Date().toDateString();
     const isToday = recordDate === today;
     
-    return !!(employee.timeIn && !employee.timeOut && isToday);
+    if (!employee.timeIn || employee.timeOut || !isToday) return false;
+    
+    const checkInTime = new Date(employee.timeIn);
+    const sixPM = getSixPMCutoff(checkInTime);
+    
+    return currentTime < sixPM;
   };
 
-  // UPDATED: Function to calculate hours worked with 5pm auto-stop
+  // UPDATED: Function to calculate hours worked with 6PM auto-stop
   const calculateHoursWorked = (employee: Employee): string => {
+    const currentTime = new Date();
     const sessions = parseSessionsFromData(employee);
     
     // If sessions data exists, use that (new format)
     if (sessions.length > 0) {
       let totalMinutes = 0;
-      let hasActiveSession = false;
+      let hasOngoingSession = false;
       
       sessions.forEach((session: AttendanceSession) => {
         if (session.check_in) {
           const checkIn = new Date(session.check_in);
-          let checkOut: Date;
+          const sixPM = getSixPMCutoff(checkIn);
+          
+          let effectiveCheckOut: Date;
           
           if (session.check_out) {
-            checkOut = new Date(session.check_out);
+            // Use the actual check-out time, but cap it at 6PM
+            const actualCheckOut = new Date(session.check_out);
+            effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
           } else {
-            // No check out - use current time but cap at 5pm
-            hasActiveSession = true;
-            checkOut = new Date();
+            // No check-out time
+            if (currentTime >= sixPM) {
+              // Past 6PM, use 6PM as effective check-out
+              effectiveCheckOut = sixPM;
+            } else {
+              // Before 6PM, session is ongoing
+              effectiveCheckOut = currentTime;
+              hasOngoingSession = true;
+            }
           }
           
-          // Get 5pm cutoff for the check-in date
-          const fivePmCutoff = getFivePmCutoff(checkIn);
-          
-          // If check-out time is after 5pm, cap it at 5pm
-          if (checkOut > fivePmCutoff) {
-            checkOut = fivePmCutoff;
-          }
-          
-          // Only calculate if check-out is after check-in
-          if (checkOut > checkIn) {
-            const diffInMs = checkOut.getTime() - checkIn.getTime();
-            const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
-            totalMinutes += diffInMinutes;
-          }
+          // Calculate minutes worked for this session
+          const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
+          const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
+          totalMinutes += diffInMinutes;
         }
       });
       
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       
-      if (hasActiveSession) {
-        return `${hours}h ${minutes}m *`; // Show ongoing for active sessions
-      }
-      return `${hours}h ${minutes}m`;
+      return hasOngoingSession ? `${hours}h ${minutes}m *` : `${hours}h ${minutes}m`;
     }
     
     // Fallback to old format for backward compatibility
@@ -149,42 +164,39 @@ const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
     const isToday = recordDate === today;
     
     const checkIn = new Date(employee.timeIn);
-    let checkOut: Date;
+    const sixPM = getSixPMCutoff(checkIn);
+    
+    let effectiveCheckOut: Date;
+    let isOngoing = false;
     
     if (employee.timeOut) {
-      checkOut = new Date(employee.timeOut);
+      // Use the actual check-out time, but cap it at 6PM
+      const actualCheckOut = new Date(employee.timeOut);
+      effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
     } else if (isToday) {
-      // If not checked out yet and it's today, use current time
-      checkOut = new Date();
+      // If not checked out yet and it's today
+      if (currentTime >= sixPM) {
+        // Past 6PM, use 6PM as effective check-out
+        effectiveCheckOut = sixPM;
+      } else {
+        // Before 6PM, session is ongoing
+        effectiveCheckOut = currentTime;
+        isOngoing = true;
+      }
     } else {
       return '-';
     }
     
-    // Get 5pm cutoff for the check-in date
-    const fivePmCutoff = getFivePmCutoff(checkIn);
-    
-    // If check-out time is after 5pm, cap it at 5pm
-    if (checkOut > fivePmCutoff) {
-      checkOut = fivePmCutoff;
-    }
-    
     // Only calculate if check-out is after check-in
-    if (checkOut <= checkIn) return '-';
+    if (effectiveCheckOut <= checkIn) return '-';
     
-    const diffInMs = checkOut.getTime() - checkIn.getTime();
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMinutes < 0) return '-';
+    const diffInMs = effectiveCheckOut.getTime() - checkIn.getTime();
+    const diffInMinutes = Math.max(0, Math.floor(diffInMs / (1000 * 60)));
     
     const hours = Math.floor(diffInMinutes / 60);
     const minutes = diffInMinutes % 60;
     
-    // If it's today and no timeOut, show it's ongoing
-    if (!employee.timeOut && isToday) {
-      return `${hours}h ${minutes}m *`;
-    }
-    
-    return `${hours}h ${minutes}m`;
+    return isOngoing ? `${hours}h ${minutes}m *` : `${hours}h ${minutes}m`;
   };
 
   // UPDATED: Function to get hours worked styling using sessions
@@ -209,15 +221,15 @@ const parseSessionsFromData = (employee: Employee): AttendanceSession[] => {
     }
   };
 
-const formatDate = (dateStr: string) => {
-  try {
-    return new Date(dateStr).toLocaleDateString('en-KE', {
-      timeZone: 'Africa/Nairobi'
-    });
-  } catch {
-    return dateStr;
-  }
-};
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString('en-KE', {
+        timeZone: 'Africa/Nairobi'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   const formatTime = (timeStr: string | null) => {
     if (!timeStr) return '-';

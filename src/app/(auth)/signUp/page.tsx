@@ -61,7 +61,7 @@ export default function SignupPage() {
                             </span>
               </div>
 
-              <h1 className="text-2xl font-bold">Mukiria Technical Training College</h1>  
+              <h1 className="text-2xl font-bold">Mukiria Technical Training Institute</h1>  
                          </div>
                        
             {/* Signup Form Component */}

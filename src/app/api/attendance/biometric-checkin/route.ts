@@ -21,7 +21,7 @@ interface AttendanceResponse {
 const TIME_CONSTRAINTS = {
   CHECK_IN_START: 7,  // 7 AM
   WORK_START: 9,      // 9 AM
-  WORK_END: 17        // 5 PM
+  WORK_END: 15        // 5 PM
 };
 
 // Helper function to safely parse sessions from Prisma Json field
