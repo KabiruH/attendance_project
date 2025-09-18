@@ -14,8 +14,8 @@ interface LocationResult {
 
 // Center point of the allowed area
 const CENTER_COORDINATES: Coordinates = {
-  latitude: -0.02559,
-  longitude: 37.6545,
+  latitude: -0.025594207927114646,
+  longitude: 37.65450937687374,
 };
 
 const MAX_DISTANCE_METERS = 70; // 70m radius
