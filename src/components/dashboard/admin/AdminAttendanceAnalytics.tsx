@@ -57,6 +57,25 @@ const AdminAttendanceAnalytics: React.FC = () => {
     }
   };
 
+  // Helper function to get Monday to Friday of current week
+  const getCurrentWeekMondayToFriday = () => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    
+    // Calculate days to subtract to get to Monday (0 for Monday, 6 for Tuesday, etc.)
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysFromMonday);
+    monday.setHours(0, 0, 0, 0);
+    
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    friday.setHours(23, 59, 59, 999);
+    
+    return { monday, friday };
+  };
+
   const processAnalyticsData = (attendanceData: any[]) => {
     // Weekly attendance trend (last 7 days)
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -94,16 +113,16 @@ const AdminAttendanceAnalytics: React.FC = () => {
       { name: 'Absent', value: todayRecords.filter(r => r.status.toLowerCase() === 'absent').length, color: '#ef4444' }
     ];
 
-    // Top performers (this week)
-    const thisWeek = attendanceData.filter(record => {
+    // Top performers (Monday to Friday of current week)
+    const { monday, friday } = getCurrentWeekMondayToFriday();
+    
+    const currentWeekRecords = attendanceData.filter(record => {
       const recordDate = new Date(record.date);
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return recordDate >= weekAgo;
+      return recordDate >= monday && recordDate <= friday;
     });
 
     const performanceMap = new Map();
-    thisWeek.forEach(record => {
+    currentWeekRecords.forEach(record => {
       const employeeId = record.employee_id;
       if (!performanceMap.has(employeeId)) {
         performanceMap.set(employeeId, {
@@ -222,7 +241,7 @@ const AdminAttendanceAnalytics: React.FC = () => {
         <CardHeader className="bg-gradient-to-r from-emerald-600 to-green-600">
           <CardTitle className="text-white flex items-center">
             <Award className="w-5 h-5 mr-2" />
-            Top Performers (This Week)
+            Top Performers (This Week - Monday to Friday)
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
