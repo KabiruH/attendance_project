@@ -108,7 +108,7 @@ const AdminAttendanceAnalytics: React.FC = () => {
     );
 
     const statusBreakdownData = [
-      { name: 'Present', value: todayRecords.filter(r => r.status.toLowerCase() === 'present').length, color: '#22c55e' },
+      { name: 'On Time', value: todayRecords.filter(r => r.status.toLowerCase() === 'present').length, color: '#22c55e' },
       { name: 'Late', value: todayRecords.filter(r => r.status.toLowerCase() === 'late').length, color: '#eab308' },
       { name: 'Absent', value: todayRecords.filter(r => r.status.toLowerCase() === 'absent').length, color: '#ef4444' }
     ];
@@ -200,7 +200,7 @@ const AdminAttendanceAnalytics: React.FC = () => {
                 }}
               />
               <Legend />
-              <Bar dataKey="present" fill="#22c55e" name="Present" />
+              <Bar dataKey="present" fill="#22c55e" name="On Time" />
               <Bar dataKey="absent" fill="#ef4444" name="Absent" />
             </BarChart>
           </ResponsiveContainer>
