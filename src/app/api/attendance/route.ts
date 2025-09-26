@@ -52,9 +52,9 @@ const TIME_CONSTRAINTS = {
 
 // Geofence configuration for mobile
 const GEOFENCE = {
-  latitude: -0.0236,
-  longitude: 37.9062,
-  radius: 2_000_000,
+  latitude: -0.0284967, 
+  longitude: 37.658594, 
+  radius: 100,
 };
 
 // Mobile request validation schema

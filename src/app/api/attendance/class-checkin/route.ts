@@ -30,9 +30,9 @@ const mobileClassAttendanceSchema = z.object({
 
 // Geofence configuration
 const GEOFENCE = {
-  latitude: -0.0236,
-  longitude: 37.9062,
-  radius: 600_000, // meters - matching your work attendance
+  latitude: -0.0284967, 
+  longitude: 37.658594, 
+  radius: 100, // meters - matching your work attendance
 };
 
 const CLASS_RULES = {
