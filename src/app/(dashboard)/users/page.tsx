@@ -45,6 +45,7 @@ export default function UsersPage() {
     phone_number: '',
     gender: '',
     department: '',
+    email: '',
     is_active: true
   });
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -77,6 +78,7 @@ export default function UsersPage() {
       phone_number: '',
       gender: '',
       department: '',
+      email: '',
       is_active: true
     });
     setError('');
@@ -92,11 +94,12 @@ export default function UsersPage() {
       phone_number: user.phone_number,
       gender: user.gender,
       department: user.department,
+      email: user.email ?? '',
       is_active: user.is_active
     });
     setError('');
     setIsDialogOpen(true);
-  };
+  };  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +136,7 @@ export default function UsersPage() {
         phone_number: '',
         gender: '',
         department: '',
+        email: '',
         is_active: true
       });
       setEditingUser(null);
@@ -216,6 +220,16 @@ export default function UsersPage() {
                   id="id_number"
                   value={formData.id_number}
                   onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">E-Mail</Label>
+                <Input
+                  id="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                 />
               </div>

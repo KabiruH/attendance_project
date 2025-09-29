@@ -27,6 +27,7 @@ export default function UsersTable({ users, onEdit }: UsersTableProps) {
           <TableHead>Name</TableHead>
           <TableHead>ID/Passport Number</TableHead>
           <TableHead>Role</TableHead>
+           <TableHead>Email</TableHead>
           <TableHead>Department</TableHead>
           <TableHead>Phone Number</TableHead>
           <TableHead>Gender</TableHead>
@@ -50,6 +51,7 @@ export default function UsersTable({ users, onEdit }: UsersTableProps) {
             <TableCell>{user.name}</TableCell>
             <TableCell>{user.id_number}</TableCell>
             <TableCell className="capitalize">{user.role}</TableCell>
+             <TableCell className="capitalize">{user.email}</TableCell>
               <TableCell className="capitalize">{user.department}</TableCell>
             <TableCell>{user.phone_number}</TableCell>
             <TableCell className="capitalize">{user.gender}</TableCell>
