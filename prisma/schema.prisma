@@ -50,6 +50,7 @@ model Employees {
   LoginLogs       LoginLogs[]
   PasswordReset   PasswordReset[] 
   DeviceCheckIn   DeviceCheckIn[]  
+  LocationHeartbeat  LocationHeartbeat[]
 
   @@index([id_number, role]) // Index for faster verification lookups
 }
@@ -269,4 +270,20 @@ model DeviceCheckIn {
   @@map("DeviceCheckIn")
   @@index([device_hash, checked_in_at])
   @@index([employee_id])
+}
+
+model LocationHeartbeat {
+  id              Int       @id @default(autoincrement())
+  employee_id     Int
+  latitude        Float
+  longitude       Float
+  accuracy        Float
+  is_inside_fence Boolean   // Pre-calculated for efficiency
+  recorded_at     DateTime  @default(now())
+  
+  employee        Employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  
+  @@map("LocationHeartbeat")
+  @@index([employee_id, recorded_at])
+  @@index([is_inside_fence, recorded_at])
 }

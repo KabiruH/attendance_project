@@ -20,6 +20,7 @@ interface AttendanceSession {
 const ATTENDANCE_RULES = {
   AUTO_CHECKOUT: 15,       // 5 PM - automatic checkout time
   CLASS_DURATION_HOURS: 2, // 2 hours - automatic class checkout after this duration
+  OUTSIDE_FENCE_TIMEOUT_HOURS: 1, // 1 hour - auto-checkout if outside premises this long
 };
 
 export async function processAbsentRecords(date: Date = new Date()) {
@@ -190,6 +191,140 @@ export async function processClassAutoCheckouts(currentTime: Date) {
   }
 }
 
+// NEW: Process outside fence auto-checkouts
+// NEW: Process outside fence auto-checkouts (OPTIMIZED)
+export async function processOutsideFenceCheckouts(currentTime: Date) {
+  try {
+    const currentDate = currentTime.toISOString().split('T')[0];
+    const timeoutThreshold = new Date(currentTime);
+    timeoutThreshold.setHours(
+      timeoutThreshold.getHours() - ATTENDANCE_RULES.OUTSIDE_FENCE_TIMEOUT_HOURS
+    );
+
+    console.log('Checking for users outside fence > 1 hour...');
+
+    // Find all employees currently checked in today
+    const checkedInEmployees = await db.attendance.findMany({
+      where: {
+        date: new Date(currentDate),
+        check_in_time: { not: null },
+        check_out_time: null,
+      },
+      include: {
+        Employees: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    console.log(`Found ${checkedInEmployees.length} checked-in employees`);
+
+    if (checkedInEmployees.length === 0) {
+      return 0;
+    }
+
+    // ✅ OPTIMIZATION: Batch fetch all heartbeats in ONE query instead of N queries
+    const employeeIds = checkedInEmployees.map(a => a.employee_id);
+    
+    const allHeartbeats = await db.locationHeartbeat.groupBy({
+      by: ['employee_id'],
+      where: {
+        employee_id: { in: employeeIds }
+      },
+      _max: {
+        recorded_at: true
+      }
+    });
+
+    // Now fetch the actual heartbeat records for those max timestamps
+    const latestHeartbeats = await db.locationHeartbeat.findMany({
+      where: {
+        employee_id: { in: employeeIds },
+        recorded_at: {
+          in: allHeartbeats.map(h => h._max.recorded_at).filter(Boolean) as Date[]
+        }
+      }
+    });
+
+    // Create a map for quick lookup
+    const heartbeatMap = new Map(
+      latestHeartbeats.map(hb => [hb.employee_id, hb])
+    );
+
+    let outsideFenceCheckouts = 0;
+
+    for (const attendance of checkedInEmployees) {
+      const employeeId = attendance.employee_id;
+      const lastHeartbeat = heartbeatMap.get(employeeId);
+
+      if (!lastHeartbeat) {
+        // Only log in debug mode to reduce noise
+        // console.log(`No heartbeat for employee ${employeeId} - skipping`);
+        continue;
+      }
+
+      // Check if outside fence AND last heartbeat was more than 1 hour ago
+      if (!lastHeartbeat.is_inside_fence && lastHeartbeat.recorded_at < timeoutThreshold) {
+        console.log(`Auto-checking out employee ${employeeId} (${attendance.Employees.name}) - outside premises`);
+
+        // Parse existing sessions
+        let existingSessions: AttendanceSession[] = [];
+        
+        if (attendance.sessions) {
+          try {
+            const sessionData = attendance.sessions as unknown;
+            if (Array.isArray(sessionData)) {
+              existingSessions = sessionData as AttendanceSession[];
+            } else if (typeof sessionData === 'string') {
+              existingSessions = JSON.parse(sessionData) as AttendanceSession[];
+            }
+          } catch (parseError) {
+            console.error('Error parsing existing sessions:', parseError);
+            existingSessions = [];
+          }
+        }
+
+        // Find and close active session
+        const activeSessionIndex = existingSessions.findIndex(
+          (s: any) => s.check_in && !s.check_out
+        );
+
+        if (activeSessionIndex !== -1) {
+          existingSessions[activeSessionIndex].check_out = lastHeartbeat.recorded_at;
+          existingSessions[activeSessionIndex].auto_checkout = true;
+          existingSessions[activeSessionIndex].auto_checkout_reason = 'outside_premises_timeout';
+          existingSessions[activeSessionIndex].last_known_location = {
+            latitude: lastHeartbeat.latitude,
+            longitude: lastHeartbeat.longitude,
+            accuracy: lastHeartbeat.accuracy,
+            timestamp: lastHeartbeat.recorded_at.getTime(),
+          };
+        }
+
+        const sessionsJson = JSON.parse(JSON.stringify(existingSessions));
+
+        // Update attendance record
+        await db.attendance.update({
+          where: { id: attendance.id },
+          data: {
+            check_out_time: lastHeartbeat.recorded_at,
+            sessions: sessionsJson,
+          },
+        });
+
+        outsideFenceCheckouts++;
+      }
+    }
+
+    console.log(`Auto-checked out ${outsideFenceCheckouts} employees (outside fence)`);
+    return outsideFenceCheckouts;
+
+  } catch (error) {
+    console.error('Failed to process outside fence checkouts:', error);
+    return 0;
+  }
+}
+
 // ENHANCED: Add session tracking for work checkouts
 async function performWorkAutoCheckout(record: any, checkoutTime: Date) {
   let existingSessions: AttendanceSession[] = [];
@@ -240,6 +375,9 @@ export async function processAutomaticAttendance() {
       // Process class auto-checkouts (can happen anytime after 2 hours)
       const classCheckoutCount = await processClassAutoCheckouts(currentTime);
 
+      // NEW: Process outside fence checkouts (can happen anytime)
+      const outsideFenceCheckouts = await processOutsideFenceCheckouts(currentTime);
+
       // Only proceed with work processing if it's 5 PM or later
       if (currentTime.getHours() >= 17) {
           // 1. Process work auto-checkouts
@@ -266,6 +404,7 @@ export async function processAutomaticAttendance() {
           return {
               workCheckouts: pendingCheckouts.length,
               classCheckouts: classCheckoutCount,
+              outsideFenceCheckouts: outsideFenceCheckouts,
               absentRecords: absentCount,
               missedDaysProcessed: missedRecordsCount
           };
@@ -274,6 +413,7 @@ export async function processAutomaticAttendance() {
       return {
           workCheckouts: 0,
           classCheckouts: classCheckoutCount,
+          outsideFenceCheckouts: outsideFenceCheckouts,
           absentRecords: 0,
           missedDaysProcessed: missedRecordsCount
       };
@@ -282,6 +422,7 @@ export async function processAutomaticAttendance() {
       return {
           workCheckouts: 0,
           classCheckouts: 0,
+          outsideFenceCheckouts: 0,
           absentRecords: 0,
           missedDaysProcessed: 0
       };
@@ -296,6 +437,9 @@ export async function ensureCheckouts() {
 
     // Process class checkouts (any time)
     await processClassAutoCheckouts(currentTime);
+
+    // NEW: Process outside fence checkouts (any time)
+    await processOutsideFenceCheckouts(currentTime);
 
     // Find all work records from today that haven't been checked out
     // and where it's past 5 PM
