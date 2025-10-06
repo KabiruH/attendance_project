@@ -49,6 +49,7 @@ model Employees {
   Attendance      Attendance[]
   LoginLogs       LoginLogs[]
   PasswordReset   PasswordReset[] 
+  DeviceCheckIn   DeviceCheckIn[]  
 
   @@index([id_number, role]) // Index for faster verification lookups
 }
@@ -252,4 +253,20 @@ model BiometricLogs {
   @@index([timestamp])
   @@index([action])
   @@index([status])
+}
+
+model DeviceCheckIn {
+  id              Int       @id @default(autoincrement())
+  device_hash     String    @db.VarChar(64)
+  employee_id     Int
+  checked_in_at   DateTime  @default(now())
+  ip_address      String?   @db.VarChar(45) 
+  user_agent      String?   @db.Text         
+  
+  // ✅ ADD THIS RELATION (important!)
+  employee        Employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  
+  @@map("DeviceCheckIn")
+  @@index([device_hash, checked_in_at])
+  @@index([employee_id])
 }

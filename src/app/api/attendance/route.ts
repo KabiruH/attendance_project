@@ -8,6 +8,7 @@ import { processAutomaticAttendance } from '@/lib/utils/cronUtils';
 import { verifyMobileJWT } from '@/lib/auth/mobile-jwt';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import crypto from 'crypto';
 
 interface JwtPayload {
   id: number;
@@ -178,12 +179,6 @@ function hasActiveSession(attendance: any): boolean {
     return false;
   }
 
-  console.log('=== hasActiveSession DEBUG ===');
-  console.log('Attendance ID:', attendance.id);
-  console.log('check_in_time:', !!attendance.check_in_time);
-  console.log('check_out_time:', !!attendance.check_out_time);
-  console.log('sessions:', attendance.sessions);
-
   if (attendance.sessions && Array.isArray(attendance.sessions)) {
     console.log('Using sessions array, count:', attendance.sessions.length);
     
@@ -215,7 +210,114 @@ function hasActiveSession(attendance: any): boolean {
   return fallbackResult;
 }
 
-// Replace your entire handleCheckIn function with this:
+// Configuration
+const DEVICE_CHECK_CONFIG = {
+  TIME_WINDOW_MINUTES: 360, // Block if same device used within 10 minutes
+  ENABLED: true, // Easy toggle
+};
+
+/**
+ * Generate device fingerprint from request data
+ * Combines multiple attributes for uniqueness
+ */
+function generateDeviceFingerprint(request: NextRequest, isMobileRequest: boolean): string {
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  const ip = getClientIP(request);
+  
+  // For mobile, include additional headers that apps typically send
+  const acceptLanguage = request.headers.get('accept-language') || '';
+  const acceptEncoding = request.headers.get('accept-encoding') || '';
+  
+  // Combine attributes
+  const fingerprintData = `${userAgent}|${ip}|${acceptLanguage}|${acceptEncoding}`;
+  
+  // Create hash
+  return crypto
+    .createHash('sha256')
+    .update(fingerprintData)
+    .digest('hex');
+}
+
+/**
+ * Check if device was recently used by a different employee
+ */
+async function checkDeviceReuse(
+  deviceHash: string,
+  currentEmployeeId: number
+): Promise<{ allowed: boolean; error?: string; lastUser?: string }> {
+  if (!DEVICE_CHECK_CONFIG.ENABLED) {
+    return { allowed: true };
+  }
+
+  const timeWindowStart = new Date();
+  timeWindowStart.setMinutes(
+    timeWindowStart.getMinutes() - DEVICE_CHECK_CONFIG.TIME_WINDOW_MINUTES
+  );
+
+  // Find recent check-ins from this device
+  const recentCheckIn = await db.deviceCheckIn.findFirst({
+    where: {
+      device_hash: deviceHash,
+      checked_in_at: {
+        gte: timeWindowStart,
+      },
+      employee_id: {
+        not: currentEmployeeId, // Different employee
+      },
+    },
+    include: {
+      employee: {
+        select: { name: true },
+      },
+    },
+    orderBy: {
+      checked_in_at: 'desc',
+    },
+  });
+
+  if (recentCheckIn) {
+    return {
+      allowed: false,
+      error: 'This device was recently used to check in another user',
+      lastUser: recentCheckIn.employee?.name,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Record device check-in
+ */
+async function recordDeviceCheckIn(
+  deviceHash: string,
+  employeeId: number,
+  clientIP: string,
+  userAgent: string
+): Promise<void> {
+  if (!DEVICE_CHECK_CONFIG.ENABLED) return;
+
+  await db.deviceCheckIn.create({
+    data: {
+      device_hash: deviceHash,
+      employee_id: employeeId,
+      ip_address: clientIP,
+      user_agent: userAgent,
+    },
+  });
+
+  // Optional: Clean up old records (older than 24 hours)
+  const oneDayAgo = new Date();
+  oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+  
+  await db.deviceCheckIn.deleteMany({
+    where: {
+      checked_in_at: {
+        lt: oneDayAgo,
+      },
+    },
+  });
+}
 
 async function handleCheckIn(
   employee_id: number,
@@ -646,6 +748,8 @@ export async function POST(request: NextRequest) {
     // Detect if this is a mobile request
     const isMobileRequest = body?.type?.startsWith('work_') || !!body?.location;
 
+  // ✅ GENERATE DEVICE FINGERPRINT
+    const deviceFingerprint = generateDeviceFingerprint(request, isMobileRequest);
 
     // Validate mobile requests
     if (isMobileRequest) {
@@ -695,6 +799,21 @@ export async function POST(request: NextRequest) {
     // Authenticate user (supports JWT and mobile JWT)
     const { userId, authMethod } = await authenticateUser(request);
 
+     // ✅ CHECK DEVICE REUSE (before processing check-in)
+    const deviceCheck = await checkDeviceReuse(deviceFingerprint, userId);
+
+  if (!deviceCheck.allowed) {
+      console.log(`🚫 Device reuse blocked for employee ${userId}`);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: deviceCheck.error,
+          code: 'DEVICE_REUSE_DETECTED'
+        },
+        { status: 403 }
+      );
+    }
+
     // Get employee record
     const employee = await db.employees.findUnique({
       where: { id: userId },
@@ -715,6 +834,12 @@ export async function POST(request: NextRequest) {
     const normalizedAction = body?.type === 'work_checkin' ? 'check-in' : 
                             body?.type === 'work_checkout' ? 'check-out' : 
                             body?.action;
+
+    // Only check device reuse for check-ins (not check-outs)
+    if (normalizedAction === 'check-in') {
+      // ✅ RECORD THIS DEVICE CHECK-IN
+      await recordDeviceCheckIn(deviceFingerprint, userId, clientIP, userAgent);
+    }
 
     const handler = normalizedAction === 'check-in' ? 
       (userId: number, time: Date, date: string) => handleCheckIn(userId, time, date, isMobileRequest, body?.location, clientIP, userAgent) :

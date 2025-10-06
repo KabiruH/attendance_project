@@ -200,7 +200,7 @@ const AdminAttendanceAnalytics: React.FC = () => {
                 }}
               />
               <Legend />
-              <Bar dataKey="present" fill="#22c55e" name="On Time" />
+              <Bar dataKey="present" fill="#22c55e" name="Present" />
               <Bar dataKey="absent" fill="#ef4444" name="Absent" />
             </BarChart>
           </ResponsiveContainer>
