@@ -5,7 +5,6 @@ import { jwtVerify } from 'jose';
 import { db } from '@/lib/db/db';
 
 // Helper function to verify authentication
-// Helper function to verify authentication
 async function verifyAuth() {
     try {
         const cookieStore = await cookies();

@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusCircle, Upload, Download, Settings, User, Search, X } from "lucide-react";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -48,6 +55,7 @@ export default function ClassesPage() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [classes, setClasses] = useState<Class[]>([]);
     const [searchTerm, setSearchTerm] = useState<string>('');
+    const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -66,24 +74,50 @@ export default function ClassesPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isAdmin = userRole === 'admin';
-    const isTrainer = userRole === 'employee'; // All employees can potentially be trainers
+    const isTrainer = userRole === 'employee';
 
-    // Filtered classes based on search term
+    // Get unique departments sorted alphabetically
+    const departments = useMemo(() => {
+        const uniqueDepts = Array.from(new Set(classes.map(c => c.department)));
+        return uniqueDepts.sort((a, b) => a.localeCompare(b));
+    }, [classes]);
+
+    // Filtered classes based on search term and department
     const filteredClasses = useMemo(() => {
-        if (!searchTerm.trim()) return classes;
-        
-        const term = searchTerm.toLowerCase();
-        return classes.filter(classItem => 
-            classItem.name.toLowerCase().includes(term) ||
-            classItem.code.toLowerCase().includes(term) ||
-            classItem.department.toLowerCase().includes(term) ||
-            classItem.term.toLowerCase().includes(term)  // Include term in search
-        );
-    }, [classes, searchTerm]);
+        let filtered = classes;
+
+        // Filter by department first
+        if (selectedDepartment !== 'all') {
+            filtered = filtered.filter(c => c.department === selectedDepartment);
+        }
+
+        // Then filter by search term (excluding department from search)
+        if (searchTerm.trim()) {
+            const term = searchTerm.toLowerCase();
+            filtered = filtered.filter(classItem => 
+                classItem.name.toLowerCase().includes(term) ||
+                classItem.code.toLowerCase().includes(term) ||
+                classItem.term.toLowerCase().includes(term)
+            );
+        }
+
+        return filtered;
+    }, [classes, searchTerm, selectedDepartment]);
 
     // Clear search function
     const clearSearch = () => {
         setSearchTerm('');
+    };
+
+    // Clear department filter
+    const clearDepartmentFilter = () => {
+        setSelectedDepartment('all');
+    };
+
+    // Clear all filters
+    const clearAllFilters = () => {
+        setSearchTerm('');
+        setSelectedDepartment('all');
     };
 
     // Fetch current user using your auth pattern
@@ -105,7 +139,6 @@ export default function ClassesPage() {
             setUserRole(user.role);
         } catch (error) {
             console.error('Error authenticating user:', error);
-            // Handle auth error - redirect to login or show error
         }
     };
 
@@ -124,9 +157,8 @@ export default function ClassesPage() {
     useEffect(() => {
         if (userRole) {
             if (isAdmin) {
-                fetchClasses(); // Admin fetches all classes directly
+                fetchClasses();
             } else {
-                // For employees, just set loading to false - ClassSelection handles its own data
                 setIsLoading(false);
             }
         }
@@ -308,16 +340,13 @@ export default function ClassesPage() {
 
     // Callback functions to handle component synchronization
     const handleClassSelectionSaved = () => {
-        // Only refresh MyClasses when selection is actually SAVED
         setRefreshMyClasses(prev => prev + 1);
     };
 
     const handleClassRemoved = () => {
-        // When a class is removed from MyClasses, refresh ClassSelection to update checkboxes
         setRefreshClassSelection(prev => prev + 1);
     };
 
-    // For employees, we get classes from the ClassSelection component instead
     const handleClassesLoaded = (loadedClasses: Class[]) => {
         setClasses(loadedClasses);
         setIsLoading(false);
@@ -373,34 +402,77 @@ export default function ClassesPage() {
                     </TabsList>
 
                     <TabsContent value="manage" className="space-y-6">
-                        {/* Search Section */}
-                        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                            <div className="relative flex-1 max-w-md">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                <Input
-                                    placeholder="Search by class name, code, department, or term..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10 pr-10"
-                                />
-                                {searchTerm && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={clearSearch}
-                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0 hover:bg-gray-200"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </Button>
+                        {/* Search and Filter Section */}
+                        <div className="flex flex-col gap-4">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                                {/* Search Input */}
+                                <div className="relative flex-1 max-w-md">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                    <Input
+                                        placeholder="Search by class name, code, or term..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10 pr-10"
+                                    />
+                                    {searchTerm && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={clearSearch}
+                                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0 hover:bg-gray-200"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* Department Filter */}
+                                <div className="flex items-center gap-2">
+                                    <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                                        <SelectTrigger className="w-[200px]">
+                                            <SelectValue placeholder="All Departments" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Departments</SelectItem>
+                                            {departments.map(dept => (
+                                                <SelectItem key={dept} value={dept}>
+                                                    {dept}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {selectedDepartment !== 'all' && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={clearDepartmentFilter}
+                                            className="h-9"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Results count and clear filters */}
+                            <div className="flex items-center justify-between">
+                                {(searchTerm || selectedDepartment !== 'all') && (
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-sm text-gray-500">
+                                            {filteredClasses.length} of {classes.length} classes found
+                                        </div>
+                                        {(searchTerm || selectedDepartment !== 'all') && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={clearAllFilters}
+                                            >
+                                                Clear all filters
+                                            </Button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                            
-                            {/* Results count */}
-                            {searchTerm && (
-                                <div className="text-sm text-gray-500">
-                                    {filteredClasses.length} of {classes.length} classes found
-                                </div>
-                            )}
                         </div>
 
                         {/* Admin Controls */}
@@ -427,23 +499,23 @@ export default function ClassesPage() {
                         </div>
 
                         {/* No results message */}
-                        {searchTerm && filteredClasses.length === 0 && (
+                        {(searchTerm || selectedDepartment !== 'all') && filteredClasses.length === 0 && (
                             <div className="text-center py-8 text-gray-500">
                                 <Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
                                 <p className="text-lg font-medium">No classes found</p>
-                                <p className="text-sm">Try adjusting your search terms</p>
+                                <p className="text-sm">Try adjusting your search or filter</p>
                                 <Button
                                     variant="outline"
-                                    onClick={clearSearch}
+                                    onClick={clearAllFilters}
                                     className="mt-3"
                                 >
-                                    Clear search
+                                    Clear all filters
                                 </Button>
                             </div>
                         )}
 
                         {/* Classes Table */}
-                        {(!searchTerm || filteredClasses.length > 0) && (
+                        {((!searchTerm && selectedDepartment === 'all') || filteredClasses.length > 0) && (
                             <ClassesTable
                                 classes={filteredClasses}
                                 onEdit={handleEdit}

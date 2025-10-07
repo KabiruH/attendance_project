@@ -241,6 +241,9 @@ function generateDeviceFingerprint(request: NextRequest, isMobileRequest: boolea
 /**
  * Check if device was recently used by a different employee
  */
+/**
+ * Check if device was recently used by a different employee
+ */
 async function checkDeviceReuse(
   deviceHash: string,
   currentEmployeeId: number
@@ -276,16 +279,36 @@ async function checkDeviceReuse(
   });
 
   if (recentCheckIn) {
+    // Calculate remaining time in a user-friendly format
+    const minutesRemaining = Math.ceil(
+      (recentCheckIn.checked_in_at.getTime() + 
+       DEVICE_CHECK_CONFIG.TIME_WINDOW_MINUTES * 60 * 1000 - 
+       Date.now()) / (60 * 1000)
+    );
+
+    const hoursRemaining = Math.floor(minutesRemaining / 60);
+    const minsRemaining = minutesRemaining % 60;
+
+    let timeMessage = '';
+    if (hoursRemaining > 0 && minsRemaining > 0) {
+      timeMessage = `${hoursRemaining} hour${hoursRemaining > 1 ? 's' : ''} and ${minsRemaining} minute${minsRemaining > 1 ? 's' : ''}`;
+    } else if (hoursRemaining > 0) {
+      timeMessage = `${hoursRemaining} hour${hoursRemaining > 1 ? 's' : ''}`;
+    } else {
+      timeMessage = `${minsRemaining} minute${minsRemaining > 1 ? 's' : ''}`;
+    }
+
+    const userName = recentCheckIn.employee?.name || 'another user';
+
     return {
       allowed: false,
-      error: 'This device was recently used to check in another user',
-      lastUser: recentCheckIn.employee?.name,
+      error: `This device was recently used by ${userName}.`,
+      lastUser: userName,
     };
   }
 
   return { allowed: true };
 }
-
 /**
  * Record device check-in
  */
