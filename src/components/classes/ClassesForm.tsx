@@ -22,6 +22,7 @@ interface Class {
   id: number;
   name: string;
   code: string;
+  term: string;
   description?: string;
   department: string;
   duration_hours: number;

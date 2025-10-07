@@ -4,6 +4,7 @@ interface Class {
   id: number;
   name: string;
   code: string;
+  term: string;
   description?: string;
   department: string;
   duration_hours: number;
@@ -29,6 +30,7 @@ export default function ClassesTable({ classes, onEdit, onDeactivate }: ClassesT
             <th className="h-12 px-4 text-left align-middle font-medium">Department</th>
             <th className="h-12 px-4 text-left align-middle font-medium">Duration (hrs)</th>
             <th className="h-12 px-4 text-left align-middle font-medium">Status</th>
+            <th className="h-12 px-4 text-left align-middle font-medium">Term</th>
             <th className="h-12 px-4 text-left align-middle font-medium">Actions</th>
           </tr>
         </thead>
@@ -57,6 +59,7 @@ export default function ClassesTable({ classes, onEdit, onDeactivate }: ClassesT
                   {classItem.is_active ? 'Active' : 'Inactive'}
                 </span>
               </td>
+              <td className="p-4 align-middle">{classItem.term}</td>
               <td className="p-4 align-middle">
                 <div className="flex gap-2">
                   <Button 

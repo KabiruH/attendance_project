@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             code: true,
+            term: true,  // Added term field
             description: true,
             department: true,
             duration_hours: true,
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest) {
         id: assignment.class.id,
         name: assignment.class.name,
         code: assignment.class.code,
+        term: assignment.class.term,  // Added term field
         description: assignment.class.description,
         department: assignment.class.department,
         duration_hours: assignment.class.duration_hours,

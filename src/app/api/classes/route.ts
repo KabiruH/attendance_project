@@ -106,12 +106,12 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, code, description, department, duration_hours } = body;
+        const { name, code, term, description, department, duration_hours } = body;
 
-        // Validation
-        if (!name || !code || !department) {
+        // Validation - Added term as required field
+        if (!name || !code || !term || !department) {
             return NextResponse.json(
-                { error: 'Name, code, and department are required' },
+                { error: 'Name, code, term, and department are required' },
                 { status: 400 }
             );
         }
@@ -128,11 +128,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create new class
+        // Create new class - Added term field
         const newClass = await db.classes.create({
             data: {
                 name,
                 code: code.toUpperCase(),
+                term,
                 description: description || null,
                 department,
                 duration_hours: duration_hours || 2,
@@ -174,12 +175,12 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { id, name, code, description, department, duration_hours, is_active } = body;
+        const { id, name, code, term, description, department, duration_hours, is_active } = body;
 
-        // Validation
-        if (!id || !name || !code || !department) {
+        // Validation - Added term as required field
+        if (!id || !name || !code || !term || !department) {
             return NextResponse.json(
-                { error: 'ID, name, code, and department are required' },
+                { error: 'ID, name, code, term, and department are required' },
                 { status: 400 }
             );
         }
@@ -210,12 +211,13 @@ export async function PUT(request: NextRequest) {
             }
         }
 
-        // Update class
+        // Update class - Added term field
         const updatedClass = await db.classes.update({
             where: { id },
             data: {
                 name,
                 code: code.toUpperCase(),
+                term,
                 description: description || null,
                 department,
                 duration_hours: duration_hours || 2,

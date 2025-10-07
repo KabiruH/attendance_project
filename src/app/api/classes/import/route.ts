@@ -5,6 +5,7 @@ import { jwtVerify } from 'jose';
 import { db } from '@/lib/db/db';
 
 // Helper function to verify authentication
+// Helper function to verify authentication
 async function verifyAuth() {
     try {
         const cookieStore = await cookies();
@@ -26,7 +27,7 @@ async function verifyAuth() {
         // Verify user is still active
         const user = await db.users.findUnique({
             where: { id: userId },
-            select: { id: true, name: true, role: true, department: true, is_active: true }
+            select: { id: true, name: true, role: true, department: true, is_active: true }  // Remove term: true
         });
 
         if (!user || !user.is_active) {
@@ -42,6 +43,7 @@ async function verifyAuth() {
 // POST /api/classes/import - Bulk import classes from Excel (Admin only)
 export async function POST(request: NextRequest) {
     try {
+      
         const authResult = await verifyAuth();
         if (authResult.error) {
             return NextResponse.json({ error: authResult.error }, { status: authResult.status });
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
         // Process each class
         for (let i = 0; i < classes.length; i++) {
             const classData = classes[i];
-
+  const term = classData.term?.toString().trim() || 'Term 1';
             try {
                 // Validation
                 if (!classData.name || !classData.code || !classData.department) {
@@ -115,6 +117,7 @@ export async function POST(request: NextRequest) {
                         code: upperCode,
                         description: classData.description || null,
                         department: classData.department,
+                        term: term,
                         duration_hours: classData.duration_hours || 2,
                         is_active: classData.is_active !== false,
                         created_by: classData.created_by || user.name

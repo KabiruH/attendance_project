@@ -146,14 +146,14 @@ model LoginLogs {
   @@index([ip_address])
 }
 
-// Classes that trainers can be assigned to
 model Classes {
   id              Int       @id @default(autoincrement())
-  name            String    @db.VarChar(100)        // e.g., "Advanced Mathematics"
-  code            String    @unique @db.VarChar(20)  // e.g., "MATH301"
-  description     String?   @db.Text                 // Optional class description
-  department      String    @db.VarChar(50)          // Department offering the class
-  duration_hours  Int       @default(2)              // Class duration in hours
+  name            String    @db.VarChar(100)
+  code            String    @unique @db.VarChar(20)
+  description     String?   @db.Text
+  department      String    @db.VarChar(50)
+  term            String    @default("Term 1") @db.VarChar(100)          
+  duration_hours  Int       @default(2)
   is_active       Boolean   @default(true)
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
@@ -162,11 +162,12 @@ model Classes {
   // Relations
   trainerAssignments TrainerClassAssignments[]
   classAttendance    ClassAttendance[]
-
+  
   @@map("Classes")
   @@index([code])
   @@index([department])
   @@index([is_active])
+  @@index([term])                                    
 }
 
 // Separate attendance tracking for classes

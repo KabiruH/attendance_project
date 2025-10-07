@@ -26,6 +26,7 @@ interface Class {
     id: number;
     name: string;
     code: string;
+    term: string;  
     description?: string;
     department: string;
     duration_hours: number;
@@ -75,7 +76,8 @@ export default function ClassesPage() {
         return classes.filter(classItem => 
             classItem.name.toLowerCase().includes(term) ||
             classItem.code.toLowerCase().includes(term) ||
-            classItem.department.toLowerCase().includes(term)
+            classItem.department.toLowerCase().includes(term) ||
+            classItem.term.toLowerCase().includes(term)  // Include term in search
         );
     }, [classes, searchTerm]);
 
@@ -134,20 +136,6 @@ export default function ClassesPage() {
     const fetchClasses = async () => {
         try {
             const response = await fetch('/api/classes');
-            if (!response.ok) throw new Error('Failed to fetch classes');
-            const data = await response.json();
-            setClasses(data);
-        } catch (error) {
-            console.error('Error fetching classes:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // API Functions for employees (fetch only active classes)
-    const fetchActiveClasses = async () => {
-        try {
-            const response = await fetch('/api/classes?active_only=true');
             if (!response.ok) throw new Error('Failed to fetch classes');
             const data = await response.json();
             setClasses(data);
@@ -254,7 +242,7 @@ export default function ClassesPage() {
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
             const formattedClasses = jsonData.map((row: any, index: number) => {
-                const requiredFields = ['name', 'code', 'department'];
+                const requiredFields = ['name', 'code', 'department', 'term'];
                 const missingFields = requiredFields.filter(field => !row[field]);
 
                 if (missingFields.length > 0) {
@@ -264,6 +252,7 @@ export default function ClassesPage() {
                 return {
                     name: row.name,
                     code: row.code.toString().toUpperCase(),
+                    term: row.term,
                     description: row.description || '',
                     department: row.department,
                     duration_hours: row.duration_hours || 2,
@@ -303,6 +292,7 @@ export default function ClassesPage() {
             {
                 name: 'Digital Marketing Fundamentals',
                 code: 'DM101',
+                term: 'Fall 2024',
                 description: 'Introduction to digital marketing strategies',
                 department: 'Marketing',
                 duration_hours: 2,
@@ -388,7 +378,7 @@ export default function ClassesPage() {
                             <div className="relative flex-1 max-w-md">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                                 <Input
-                                    placeholder="Search by class name, code, or department..."
+                                    placeholder="Search by class name, code, department, or term..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="pl-10 pr-10"
