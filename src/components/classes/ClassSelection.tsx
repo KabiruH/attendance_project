@@ -1,11 +1,17 @@
-//components/classes/classSelection.tsx
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, Users, Building } from "lucide-react";
+import { Clock, Users, Building, ChevronLeft, ChevronRight, X } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface Class {
   id: number;
@@ -23,8 +29,8 @@ interface Class {
 interface ClassSelectionProps {
   userId: number;
   onSelectionSaved?: () => void;
-  searchTerm?: string; // Add search support
-  onClassesLoaded?: (classes: Class[]) => void; // Callback to send classes to parent
+  searchTerm?: string;
+  onClassesLoaded?: (classes: Class[]) => void;
 }
 
 export default function ClassSelection({ 
@@ -35,23 +41,54 @@ export default function ClassSelection({
 }: ClassSelectionProps) {
   const [availableClasses, setAvailableClasses] = useState<Class[]>([]);
   const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
-  const [savedClassIds, setSavedClassIds] = useState<number[]>([]); // Track what's actually saved
+  const [savedClassIds, setSavedClassIds] = useState<number[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Filter classes based on search term
+  // Get unique departments sorted alphabetically
+  const departments = useMemo(() => {
+    const uniqueDepts = Array.from(new Set(availableClasses.map(c => c.department)));
+    return uniqueDepts.sort((a, b) => a.localeCompare(b));
+  }, [availableClasses]);
+
+  // Filter and sort classes
   const filteredClasses = useMemo(() => {
-    if (!searchTerm.trim()) return availableClasses;
-    
-    const term = searchTerm.toLowerCase();
-    return availableClasses.filter(classItem => 
-      classItem.name.toLowerCase().includes(term) ||
-      classItem.code.toLowerCase().includes(term) ||
-      classItem.department.toLowerCase().includes(term)
-    );
-  }, [availableClasses, searchTerm]);
+    let filtered = availableClasses;
+
+    // Filter by department
+    if (selectedDepartment !== 'all') {
+      filtered = filtered.filter(c => c.department === selectedDepartment);
+    }
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(classItem => 
+        classItem.name.toLowerCase().includes(term) ||
+        classItem.code.toLowerCase().includes(term) ||
+        classItem.term.toLowerCase().includes(term)
+      );
+    }
+
+    // Sort by code alphabetically
+    return [...filtered].sort((a, b) => a.code.localeCompare(b.code));
+  }, [availableClasses, searchTerm, selectedDepartment]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredClasses.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedClasses = filteredClasses.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedDepartment, filteredClasses.length]);
 
   // Fetch available classes and user's current assignments
   useEffect(() => {
@@ -69,14 +106,12 @@ export default function ClassSelection({
     try {
       setIsLoading(true);
       
-      // Fetch all active classes
       const classesResponse = await fetch('/api/classes?active_only=true');
       if (!classesResponse.ok) throw new Error('Failed to fetch classes');
       const classes = await classesResponse.json();
       
       let assignedClassIds: number[] = [];
       
-      // Try to fetch user's current assignments, but don't fail if it doesn't work
       try {
         const assignmentsResponse = await fetch(`/api/trainers/${userId}/assignments`);
         if (assignmentsResponse.ok) {
@@ -84,16 +119,14 @@ export default function ClassSelection({
           assignedClassIds = assignments.map((assignment: any) => assignment.class_id);
         } else {
           console.warn(`Failed to fetch assignments for user ${userId}: ${assignmentsResponse.status}`);
-          // Continue with empty assignments - user can still select classes
         }
       } catch (assignmentError) {
         console.warn('Error fetching assignments:', assignmentError);
-        // Continue with empty assignments - user can still select classes
       }
       
       setAvailableClasses(classes);
-      setSelectedClassIds(assignedClassIds); // Will be empty array if assignments failed
-      setSavedClassIds(assignedClassIds); // Will be empty array if assignments failed
+      setSelectedClassIds(assignedClassIds);
+      setSavedClassIds(assignedClassIds);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load data');
     } finally {
@@ -115,7 +148,6 @@ export default function ClassSelection({
     setSuccessMessage('');
 
     try {
-      // Combine currently selected with previously saved (additive behavior)
       const combinedClassIds = [...new Set([...savedClassIds, ...selectedClassIds])];
             
       const response = await fetch(`/api/trainers/${userId}/assignments`, {
@@ -135,16 +167,13 @@ export default function ClassSelection({
         throw new Error(result.error || 'Failed to save selections');
       }
 
-      // Update our saved state to match what was actually saved
       setSavedClassIds(combinedClassIds);
       setSelectedClassIds(combinedClassIds);
 
       setSuccessMessage(`Successfully updated class assignments! You are now assigned to ${combinedClassIds.length} classes.`);
       
-      // Notify parent component that selection was saved (not just changed)
       onSelectionSaved?.();
       
-      // Auto-hide success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
       
     } catch (error) {
@@ -153,6 +182,15 @@ export default function ClassSelection({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
+  const clearDepartmentFilter = () => {
+    setSelectedDepartment('all');
   };
 
   if (isLoading) {
@@ -165,34 +203,49 @@ export default function ClassSelection({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start">
         <div>
           <h2 className="text-xl font-semibold">Select Your Classes</h2>
           <p className="text-muted-foreground">
             Choose the classes you want to teach. You can check attendance only for selected classes.
           </p>
-          {searchTerm && (
-            <p className="text-sm text-blue-600 mt-1">
-              Showing {filteredClasses.length} of {availableClasses.length} classes for "{searchTerm}"
-            </p>
-          )}
         </div>
         <div className="text-sm text-muted-foreground">
           {selectedClassIds.length} of {availableClasses.length} classes selected
         </div>
       </div>
 
-      {filteredClasses.length > 0 && (
-        <div className="flex justify-end pt-4 border-t">
-          <Button 
-            onClick={handleSaveSelections}
-            disabled={isSaving}
-            className="min-w-[120px]"
+      {/* Department Filter */}
+      <div className="flex items-center gap-2">
+        <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="All Departments" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Departments</SelectItem>
+            {departments.map(dept => (
+              <SelectItem key={dept} value={dept}>
+                {dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedDepartment !== 'all' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearDepartmentFilter}
+            className="h-9"
           >
-            {isSaving ? 'Saving...' : 'Save Selection'}
+            <X className="h-4 w-4" />
           </Button>
-        </div>
-      )}
+        )}
+        {(searchTerm || selectedDepartment !== 'all') && (
+          <div className="text-sm text-muted-foreground ml-2">
+            Showing {filteredClasses.length} of {availableClasses.length} classes
+          </div>
+        )}
+      </div>
 
       {error && (
         <Alert variant="destructive">
@@ -206,83 +259,97 @@ export default function ClassSelection({
         </Alert>
       )}
 
-      {/* Classes Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredClasses.map((classItem) => {
-          const isSelected = selectedClassIds.includes(classItem.id);
-          const isAlreadySaved = savedClassIds.includes(classItem.id);
-          const isNewlySelected = isSelected && !isAlreadySaved;
-          
-          return (
-            <Card 
-              key={classItem.id} 
-              className={`cursor-pointer transition-all ${
-                isAlreadySaved
-                  ? 'ring-2 ring-green-500 bg-green-50/50' // Already saved
-                  : isNewlySelected 
-                    ? 'ring-2 ring-blue-500 bg-blue-50/50' // Newly selected
-                    : 'hover:shadow-md'
-              }`}
-              onClick={() => handleClassToggle(classItem.id, !isSelected)}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Checkbox 
-                        checked={isSelected}
-                        onChange={() => {}} // Handled by card click
-                      />
-                      <Badge variant="outline" className="text-xs">
-                        {classItem.code}
-                      </Badge>
-                      {isAlreadySaved && (
-                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                          Saved
-                        </Badge>
-                      )}
-                      {isNewlySelected && (
-                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">
-                          New
-                        </Badge>
-                      )}
-                    </div>
-                    <CardTitle className="text-base">{classItem.name}</CardTitle>
-                  </div>
-                </div>
-                {classItem.description && (
-                  <CardDescription className="text-sm">
-                    {classItem.description}
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Building className="h-4 w-4" />
-                    {classItem.department}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {classItem.duration_hours}h
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Handle case when search returns no results */}
-      {searchTerm && filteredClasses.length === 0 && availableClasses.length > 0 && (
-        <div className="text-center py-10 text-muted-foreground">
-          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No classes match your search for "{searchTerm}"</p>
-          <p className="text-sm">Try adjusting your search terms</p>
+      {/* Save Button - Top */}
+      {filteredClasses.length > 0 && (
+        <div className="flex justify-end pt-4 border-t">
+          <Button 
+            onClick={handleSaveSelections}
+            disabled={isSaving}
+            className="min-w-[120px]"
+          >
+            {isSaving ? 'Saving...' : 'Save Selection'}
+          </Button>
         </div>
       )}
 
-      {/* Handle case when no classes available at all */}
+      {/* Classes Grid */}
+      {paginatedClasses.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {paginatedClasses.map((classItem) => {
+            const isSelected = selectedClassIds.includes(classItem.id);
+            const isAlreadySaved = savedClassIds.includes(classItem.id);
+            const isNewlySelected = isSelected && !isAlreadySaved;
+            
+            return (
+              <Card 
+                key={classItem.id} 
+                className={`cursor-pointer transition-all ${
+                  isAlreadySaved
+                    ? 'ring-2 ring-green-500 bg-green-50/50'
+                    : isNewlySelected 
+                      ? 'ring-2 ring-blue-500 bg-blue-50/50'
+                      : 'hover:shadow-md'
+                }`}
+                onClick={() => handleClassToggle(classItem.id, !isSelected)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Checkbox 
+                          checked={isSelected}
+                          onChange={() => {}}
+                        />
+                        <Badge variant="outline" className="text-xs">
+                          {classItem.code}
+                        </Badge>
+                        {isAlreadySaved && (
+                          <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                            Saved
+                          </Badge>
+                        )}
+                        {isNewlySelected && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800">
+                            New
+                          </Badge>
+                        )}
+                      </div>
+                      <CardTitle className="text-base">{classItem.name}</CardTitle>
+                    </div>
+                  </div>
+                  {classItem.description && (
+                    <CardDescription className="text-sm">
+                      {classItem.description}
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Building className="h-4 w-4" />
+                      {classItem.department}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {classItem.duration_hours}h
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* No results messages */}
+      {(searchTerm || selectedDepartment !== 'all') && filteredClasses.length === 0 && availableClasses.length > 0 && (
+        <div className="text-center py-10 text-muted-foreground">
+          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>No classes match your filters</p>
+          <p className="text-sm">Try adjusting your search or department filter</p>
+        </div>
+      )}
+
       {availableClasses.length === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -291,7 +358,68 @@ export default function ClassSelection({
         </div>
       )}
 
-      {/* Save Button */}
+      {/* Pagination Controls */}
+      {filteredClasses.length > 0 && (
+        <div className="flex items-center justify-between border-t pt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredClasses.length)} of {filteredClasses.length} classes
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Items per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Per page:</span>
+              <div className="flex gap-1">
+                <Button
+                  variant={itemsPerPage === 50 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleItemsPerPageChange(50)}
+                >
+                  50
+                </Button>
+                <Button
+                  variant={itemsPerPage === 100 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleItemsPerPageChange(100)}
+                >
+                  100
+                </Button>
+              </div>
+            </div>
+
+            {/* Page navigation */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <span className="text-sm">
+                  Page {currentPage} of {totalPages}
+                </span>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Save Button - Bottom */}
       {filteredClasses.length > 0 && (
         <div className="flex justify-end pt-4 border-t">
           <Button 
