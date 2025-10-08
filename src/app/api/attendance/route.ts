@@ -212,7 +212,7 @@ function hasActiveSession(attendance: any): boolean {
 
 // Configuration
 const DEVICE_CHECK_CONFIG = {
-  TIME_WINDOW_MINUTES: 360, // Block if same device used within 10 minutes
+  TIME_WINDOW_MINUTES: 15, // Block if same device used within 10 minutes
   ENABLED: true, // Easy toggle
 };
 
