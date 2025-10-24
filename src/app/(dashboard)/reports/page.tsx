@@ -23,7 +23,7 @@ interface AttendanceSession {
   check_out?: string | null;
 }
 
-const ITEMS_PER_PAGE = 50; // Changed from 10 to 50 as requested
+const ITEMS_PER_PAGE = 50;
 
 export default function ReportsPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -36,6 +36,7 @@ export default function ReportsPage() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [showNotCheckedIn, setShowNotCheckedIn] = useState(false); // NEW: Toggle for not checked in filter
   const { toast } = useToast();
 
   // Helper function to get 6PM cutoff time for a given date
@@ -43,6 +44,12 @@ export default function ReportsPage() {
     const cutoff = new Date(date);
     cutoff.setHours(18, 0, 0, 0); // 6:00 PM
     return cutoff;
+  };
+
+  // SIMPLIFIED: Helper function to check if employee has not checked in (Present status check)
+  const isNotCheckedIn = (record: AttendanceRecord): boolean => {
+    // Show records that are NOT "Present" (includes "Late", "Absent", "Not Checked In")
+    return record.status.toLowerCase() !== 'present';
   };
 
   // Helper function to calculate hours from sessions (updated with 6PM cutoff)
@@ -163,9 +170,9 @@ export default function ReportsPage() {
     authenticateAndFetchAttendance();
   }, []);
 
-  // Filtered and paginated data
+  // SIMPLIFIED: Filtered data - no more virtual records needed
   const filteredData = useMemo(() => {
-    return attendanceData.filter((record) => {
+    const filtered = attendanceData.filter((record) => {
       const nameMatch = record.Employees?.name?.toLowerCase()
         .includes(filters.employeeName.toLowerCase()) ?? false;
       const statusMatch =
@@ -173,10 +180,41 @@ export default function ReportsPage() {
       const dateMatch =
         (!filters.startDate || record.date >= filters.startDate) &&
         (!filters.endDate || record.date <= filters.endDate);
+      
+      // NEW: Apply not-checked-in filter (shows anyone not "Present")
+      const notCheckedInMatch = !showNotCheckedIn || isNotCheckedIn(record);
   
-      return nameMatch && statusMatch && dateMatch;
+      return nameMatch && statusMatch && dateMatch && notCheckedInMatch;
     });
-  }, [filters, attendanceData]);
+
+    // NEW: Sort by status priority when filter is active
+    if (showNotCheckedIn) {
+      return filtered.sort((a, b) => {
+        // Define status priority: Late = 1, Not Checked In = 2, Absent = 3, Present = 4, Others = 5
+        const getStatusPriority = (status: string) => {
+          const normalizedStatus = status.toLowerCase();
+          if (normalizedStatus === 'late') return 1;
+          if (normalizedStatus === 'not checked in') return 2;
+          if (normalizedStatus === 'absent') return 3;
+          if (normalizedStatus === 'present') return 4;
+          return 5;
+        };
+
+        const priorityA = getStatusPriority(a.status);
+        const priorityB = getStatusPriority(b.status);
+
+        // Sort by priority first
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+
+        // If same priority, sort by employee name
+        return (a.Employees?.name || '').localeCompare(b.Employees?.name || '');
+      });
+    }
+
+    return filtered;
+  }, [filters, attendanceData, showNotCheckedIn]);
   
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
   const paginatedData = filteredData.slice(
@@ -190,6 +228,12 @@ export default function ReportsPage() {
       [key]: value,
     }));
     setCurrentPage(1); // Reset to first page when filters change
+  };
+
+  // NEW: Toggle not-checked-in filter
+  const toggleNotCheckedInFilter = () => {
+    setShowNotCheckedIn(!showNotCheckedIn);
+    setCurrentPage(1); // Reset to first page
   };
 
   // UPDATED: Helper function to calculate hours for export with 6PM cutoff
@@ -334,10 +378,20 @@ export default function ReportsPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Attendance Reports</h1>
-        <Button onClick={exportToCSV} variant="outline" size="sm">
-          <Download className="mr-2 h-4 w-4" />
-          Export to CSV
-        </Button>
+        <div className="flex gap-2">
+          {/* NEW: Not Checked In Filter Button */}
+          <Button 
+            onClick={toggleNotCheckedInFilter} 
+            variant={showNotCheckedIn ? "default" : "outline"}
+            size="sm"
+          >
+            {showNotCheckedIn ? "Showing Late/Not Checked In" : "Show Late/Not Checked In"}
+          </Button>
+          <Button onClick={exportToCSV} variant="outline" size="sm">
+            <Download className="mr-2 h-4 w-4" />
+            Export to CSV
+          </Button>
+        </div>
       </div>
 
       <Filters

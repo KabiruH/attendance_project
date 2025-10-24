@@ -23,6 +23,61 @@ const ATTENDANCE_RULES = {
   OUTSIDE_FENCE_TIMEOUT_HOURS: 1, // 1 hour - auto-checkout if outside premises this long
 };
 
+// NEW: Initialize daily attendance records for all active employees
+export async function initializeDailyAttendance(date: Date = new Date()) {
+  const currentDate = date.toISOString().split('T')[0];
+  
+  try {
+    // Get all active employees
+    const activeEmployees = await db.employees.findMany({
+      where: {
+        user: { is_active: true }
+      },
+      select: { id: true, name: true }
+    });
+
+    // Check which employees already have records for this date
+    const existingRecords = await db.attendance.findMany({
+      where: {
+        date: new Date(currentDate),
+      },
+      select: {
+        employee_id: true,
+      }
+    });
+
+    const employeesWithRecords = new Set(existingRecords.map(record => record.employee_id));
+    
+    // Find employees without records
+    const employeesWithoutRecords = activeEmployees.filter(
+      employee => !employeesWithRecords.has(employee.id)
+    );
+
+    // Create "Not Checked In" records for employees without records
+    if (employeesWithoutRecords.length > 0) {
+      await db.attendance.createMany({
+        data: employeesWithoutRecords.map(employee => ({
+          employee_id: employee.id,
+          date: new Date(currentDate),
+          status: 'Not Checked In',
+          check_in_time: null,
+          check_out_time: null,
+          sessions: []
+        }))
+      });
+
+      console.log(`Initialized ${employeesWithoutRecords.length} daily attendance records with "Not Checked In" status`);
+      return employeesWithoutRecords.length;
+    }
+
+    return 0;
+  } catch (error) {
+    console.error('Failed to initialize daily attendance:', error);
+    return 0;
+  }
+}
+
+// UPDATED: Process absent records - now changes "Not Checked In" to "Absent" at 5pm
 export async function processAbsentRecords(date: Date = new Date()) {
   const currentDate = date.toISOString().split('T')[0];
   const currentTime = date.getHours();
@@ -34,53 +89,27 @@ export async function processAbsentRecords(date: Date = new Date()) {
       return 0;
     }
 
-    const activeEmployees = await db.employees.findMany({
-      where: {
-        user: { is_active: true }
-      },
-      select: { id: true }
-    });
-
-    const existingRecords = await db.attendance.findMany({
+    // Find all "Not Checked In" records and update them to "Absent"
+    const notCheckedInRecords = await db.attendance.findMany({
       where: {
         date: new Date(currentDate),
-      },
-      select: {
-        employee_id: true,
-        check_in_time: true,
-        status: true
+        status: 'Not Checked In'
       }
     });
-    const employeesWithRecords = new Set(existingRecords.map(record => record.employee_id));
-    const potentialAbsentees = activeEmployees.filter(
-      employee => !employeesWithRecords.has(employee.id)
-    );
 
-    if (potentialAbsentees.length > 0) {
-      const notAbsentYet = await db.attendance.findMany({
+    if (notCheckedInRecords.length > 0) {
+      await db.attendance.updateMany({
         where: {
-          employee_id: { in: potentialAbsentees.map(e => e.id) },
           date: new Date(currentDate),
-          NOT: { status: 'Absent' }
+          status: 'Not Checked In'
+        },
+        data: {
+          status: 'Absent'
         }
       });
 
-      const notAbsentIds = new Set(notAbsentYet.map(r => r.employee_id));
-      const confirmedAbsentees = potentialAbsentees.filter(e => !notAbsentIds.has(e.id));
-
-      if (confirmedAbsentees.length > 0) {
-        await db.attendance.createMany({
-          data: confirmedAbsentees.map(employee => ({
-            employee_id: employee.id,
-            date: new Date(currentDate),
-            status: 'Absent',
-            check_in_time: null,
-            check_out_time: null
-          }))
-        });
-      }
-
-      return confirmedAbsentees.length;
+      console.log(`Updated ${notCheckedInRecords.length} "Not Checked In" records to "Absent"`);
+      return notCheckedInRecords.length;
     }
 
     return 0;
@@ -126,6 +155,10 @@ export async function processMissedDays() {
 
           // Skip if already processed
           if (!existingProcessing) {
+              // Initialize daily records first
+              await initializeDailyAttendance(date);
+              
+              // Then process absences
               const processedCount = await processAbsentRecords(date);
               
               // Log the processing
@@ -364,11 +397,15 @@ async function performWorkAutoCheckout(record: any, checkoutTime: Date) {
   });
 }
 
+// UPDATED: Process automatic attendance with daily initialization
 export async function processAutomaticAttendance() {
   const currentTime = new Date();
   const currentDate = new Date().toISOString().split('T')[0];
  
   try {
+      // NEW: Initialize today's records first (creates "Not Checked In" for anyone without a record)
+      const initializedCount = await initializeDailyAttendance(currentTime);
+
       // First, check and process any missed days
       const missedRecordsCount = await processMissedDays();
 
@@ -398,10 +435,11 @@ export async function processAutomaticAttendance() {
             await performWorkAutoCheckout(record, checkoutTime);
           }
 
-          // 2. Process absent records after checkout time
+          // 2. Process absent records - changes "Not Checked In" to "Absent"
           const absentCount = await processAbsentRecords(currentTime);
 
           return {
+              initializedRecords: initializedCount,
               workCheckouts: pendingCheckouts.length,
               classCheckouts: classCheckoutCount,
               outsideFenceCheckouts: outsideFenceCheckouts,
@@ -411,6 +449,7 @@ export async function processAutomaticAttendance() {
       }
    
       return {
+          initializedRecords: initializedCount,
           workCheckouts: 0,
           classCheckouts: classCheckoutCount,
           outsideFenceCheckouts: outsideFenceCheckouts,
@@ -420,6 +459,7 @@ export async function processAutomaticAttendance() {
   } catch (error) {
       console.error('Auto-attendance error:', error);
       return {
+          initializedRecords: 0,
           workCheckouts: 0,
           classCheckouts: 0,
           outsideFenceCheckouts: 0,
@@ -434,6 +474,9 @@ export async function ensureCheckouts() {
     const currentDate = new Date().toISOString().split('T')[0];
     const currentHour = new Date().getHours();
     const currentTime = new Date();
+
+    // NEW: Initialize today's attendance first
+    await initializeDailyAttendance(currentTime);
 
     // Process class checkouts (any time)
     await processClassAutoCheckouts(currentTime);

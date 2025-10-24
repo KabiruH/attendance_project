@@ -47,7 +47,7 @@ interface AttendanceSession {
 // Had to push back time by 3 hours because of the time difference in the hosted server
 const TIME_CONSTRAINTS = {
   CHECK_IN_START: 4,  // 7 AM
-  WORK_START: 6,      // 9 AM
+  WORK_START: 5,      // 9 AM
   WORK_END: 15        // 5 PM
 };
 
@@ -175,12 +175,10 @@ function parseSessionsFromJson(sessionsJson: any): WorkSession[] {
 
 function hasActiveSession(attendance: any): boolean {
   if (!attendance) {
-    console.log('❌ hasActiveSession: No attendance record');
     return false;
   }
 
   if (attendance.sessions && Array.isArray(attendance.sessions)) {
-    console.log('Using sessions array, count:', attendance.sessions.length);
     
     const activeSession = attendance.sessions.some((session: any) => {
       // Handle both formats: check_in/check_out AND check_in_time/check_out_time
@@ -188,24 +186,16 @@ function hasActiveSession(attendance: any): boolean {
       const hasCheckOut = session.check_out || session.check_out_time;
       const isActive = hasCheckIn && !hasCheckOut;
       
-      console.log('Session:', {
-        hasCheckIn: !!hasCheckIn,
-        hasCheckOut: !!hasCheckOut,
-        isActive
-      });
+    
       
       return isActive;
     });
     
-    console.log('Active session found:', activeSession);
-    console.log('=== END hasActiveSession DEBUG ===');
     return activeSession;
   }
 
   // Fallback to old format
   const fallbackResult = !!(attendance.check_in_time && !attendance.check_out_time);
-  console.log('Using fallback logic:', fallbackResult);
-  console.log('=== END hasActiveSession DEBUG ===');
   
   return fallbackResult;
 }
@@ -342,6 +332,7 @@ async function recordDeviceCheckIn(
   });
 }
 
+// UPDATED handleCheckIn function - Updates "Not Checked In" to "Present" or "Late"
 async function handleCheckIn(
   employee_id: number,
   currentTime: Date,
@@ -351,20 +342,13 @@ async function handleCheckIn(
   clientIP?: string,
   userAgent?: string
 ): Promise<AttendanceResponse> {
-  console.log('=== HANDLE CHECK-IN DEBUG ===');
-  console.log('employee_id:', employee_id);
-  console.log('currentTime:', currentTime);
-  console.log('currentDate:', currentDate);
-  console.log('isMobileRequest:', isMobileRequest);
-  console.log('Current hour:', currentTime.getHours());
+
  
   if (currentTime.getHours() < TIME_CONSTRAINTS.CHECK_IN_START) {
-    console.log('❌ Too early - before', TIME_CONSTRAINTS.CHECK_IN_START);
     return { success: false, error: 'Check-in not allowed before 7 AM' };
   }
 
   if (currentTime.getHours() >= TIME_CONSTRAINTS.WORK_END) {
-    console.log('❌ Too late - after', TIME_CONSTRAINTS.WORK_END);
     return { success: false, error: 'Check-in not allowed after 5 PM' };
   }
 
@@ -372,11 +356,8 @@ async function handleCheckIn(
     where: { employee_id, date: new Date(currentDate) },
   });
 
-  console.log('Existing attendance found:', !!existingAttendance);
   if (existingAttendance) {
-    console.log('Existing attendance ID:', existingAttendance.id);
-    console.log('Has check_in_time:', !!existingAttendance.check_in_time);
-    console.log('Has sessions:', !!existingAttendance.sessions);
+
   }
 
   const startTime = new Date(currentTime);
@@ -384,14 +365,15 @@ async function handleCheckIn(
   const status = currentTime > startTime ? 'Late' : 'Present';
 
   if (existingAttendance) {
+    // NEW: Check if status is "Not Checked In" - if so, this is their first check-in
+    const isFirstCheckIn = existingAttendance.status === 'Not Checked In' || !existingAttendance.check_in_time;
+
     if (isMobileRequest) {
-      // Mobile: Check if already checked in for work
-      if (existingAttendance.check_in_time) {
-        console.log('❌ Mobile: Already checked in');
+      // Mobile: Check if already checked in for work (and it's not first time)
+      if (existingAttendance.check_in_time && !isFirstCheckIn) {
         return { success: false, error: 'You have already checked in for work today' };
       }
      
-      console.log('✅ Mobile: Updating existing attendance record');
       // Update existing record with mobile check-in
       let existingSessions: any[] = [];
      
@@ -421,34 +403,30 @@ async function handleCheckIn(
         }
       });
      
+      // UPDATED: Change status from "Not Checked In" to "Present" or "Late"
       const attendance = await db.attendance.update({
         where: { id: existingAttendance.id },
         data: {
           check_in_time: currentTime,
           sessions: existingSessions as unknown as Prisma.JsonArray,
-          status,
+          status, // Update status to Present or Late
         },
       });
 
-      console.log('✅ Mobile: Updated attendance record');
       return {
         success: true,
         data: attendance,
-        message: 'Mobile check-in successful'
+        message: `Mobile check-in successful - Status updated to ${status}`
       };
     } else {
       // WEB: Handle multiple sessions
-      console.log('🌐 Web: Processing existing attendance');
       
       const existingSessions: WorkSession[] = parseSessionsFromJson(existingAttendance.sessions);
-      console.log('Existing sessions count:', existingSessions.length);
       
       const activeSession = existingSessions.find(session => session.check_in && !session.check_out);
-      console.log('Active session found:', !!activeSession);
 
-      if (activeSession) {
-        // Update existing active session's check-in time
-        console.log('✅ Web: Updating active session check-in time');
+      if (activeSession && !isFirstCheckIn) {
+        // Update existing active session's check-in time (only if not first check-in)
         activeSession.check_in = currentTime;
 
         const attendance = await db.attendance.update({
@@ -465,32 +443,33 @@ async function handleCheckIn(
           message: 'Check-in time updated for current session'
         };
       } else {
-        // Create new session
-        console.log('✅ Web: Creating new session');
+        // Create new session (or first session if "Not Checked In")
         existingSessions.push({
           check_in: currentTime,
           check_out: undefined
         });
 
+        // UPDATED: Update check_in_time and status from "Not Checked In" to "Present"/"Late"
         const attendance = await db.attendance.update({
           where: { id: existingAttendance.id },
           data: {
             sessions: existingSessions as unknown as Prisma.JsonArray,
+            check_in_time: currentTime, // NEW: Set check_in_time
             check_out_time: null,
+            status, // NEW: Update status from "Not Checked In" to Present/Late
           },
         });
 
         return {
           success: true,
           data: attendance,
-          message: 'New work session started'
+          message: isFirstCheckIn ? `Checked in - Status updated to ${status}` : 'New work session started'
         };
       }
     }
   }
 
-  // Create new attendance record (only if none exists)
-  console.log('🆕 Creating new attendance record');
+  // Create new attendance record (only if none exists - shouldn't happen with daily initialization)
   const initialSessions: any[] = isMobileRequest
     ? [{
         check_in: currentTime,
@@ -516,7 +495,6 @@ async function handleCheckIn(
     },
   });
 
-  console.log('✅ Created new attendance record with ID:', attendance.id);
 
   const message = isMobileRequest
     ? (status === 'Late'
@@ -826,7 +804,6 @@ export async function POST(request: NextRequest) {
     const deviceCheck = await checkDeviceReuse(deviceFingerprint, userId);
 
   if (!deviceCheck.allowed) {
-      console.log(`🚫 Device reuse blocked for employee ${userId}`);
       return NextResponse.json(
         { 
           success: false, 
