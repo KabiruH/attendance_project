@@ -125,28 +125,47 @@ function calculateHours(record: AttendanceRecord): number {
   return diffInMinutes / 60;
 }
 
+//format time helper
+function adjustToNairobiTime(date: Date | string | null): Date | null {
+  if (!date) return null;
+  const d = new Date(date);
+  d.setHours(d.getHours() + 3);
+  return d;
+}
+
+
 // Calculate comprehensive analytics
 function calculateAnalytics(data: AttendanceRecord[]): AnalyticsData {
   const totalRecords = data.length;
-  
-  // Status distribution
+   
+  // Status distribution - treat "not checked in" as "absent"
   const statusCounts: Record<string, number> = {};
   data.forEach(record => {
-    const status = record.status.toLowerCase();
+    let status = record.status.toLowerCase();
+    
+    // Treat "not checked in" as "absent" for reporting
+    if (status === 'not checked in') {
+      status = 'absent';
+    }
+    
     statusCounts[status] = (statusCounts[status] || 0) + 1;
   });
 
-  // Check-in time distribution (group by hour)
-  const checkInTimes: Record<string, number> = {};
-  data.forEach(record => {
-    if (record.check_in_time || (record.sessions && record.sessions[0]?.check_in)) {
-      const checkInTime = record.sessions?.[0]?.check_in || record.check_in_time;
-      const date = new Date(checkInTime);
-      const hour = date.getHours();
-      const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
-      checkInTimes[timeSlot] = (checkInTimes[timeSlot] || 0) + 1;
-    }
-  });
+// Check-in time distribution (group by hour)
+const checkInTimes: Record<string, number> = {};
+data.forEach(record => {
+  if (record.check_in_time || (record.sessions && record.sessions[0]?.check_in)) {
+    const checkInTime = record.sessions?.[0]?.check_in || record.check_in_time;
+    const date = new Date(checkInTime);
+    let hour = date.getHours();
+    
+    // Adjust for 3-hour time difference (server is 3 hours behind)
+    hour = (hour + 3) % 24; // Add 3 hours and wrap around if > 23
+    
+    const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
+    checkInTimes[timeSlot] = (checkInTimes[timeSlot] || 0) + 1;
+  }
+});
 
   // Late arrivals (assuming 8:00 AM is the standard time)
   const lateCount = data.filter(record => {
@@ -162,26 +181,37 @@ function calculateAnalytics(data: AttendanceRecord[]): AnalyticsData {
     ? workHours.reduce((sum, h) => sum + h, 0) / workHours.length 
     : 0;
 
-  // Employee-specific stats
-  const employeeStats: Record<string, any> = {};
-  data.forEach(record => {
-    const empName = record.Employees?.name || 'Unknown';
-    if (!employeeStats[empName]) {
-      employeeStats[empName] = {
-        totalDays: 0,
-        present: 0,
-        late: 0,
-        absent: 0,
-        totalHours: 0,
-      };
-    }
-    employeeStats[empName].totalDays++;
-    const status = record.status.toLowerCase();
-    if (status === 'present') employeeStats[empName].present++;
-    if (status === 'late') employeeStats[empName].late++;
-    if (status === 'absent' || status === 'not checked in') employeeStats[empName].absent++;
-    employeeStats[empName].totalHours += calculateHours(record);
-  });
+// Employee-specific stats
+const employeeStats: Record<string, any> = {};
+data.forEach(record => {
+  const empName = record.Employees?.name || 'Unknown';
+  if (!employeeStats[empName]) {
+    employeeStats[empName] = {
+      totalDays: 0,
+      present: 0,
+      late: 0,
+      absent: 0,
+      totalHours: 0,
+    };
+  }
+  employeeStats[empName].totalDays++;
+  
+  let status = record.status.toLowerCase().trim(); // Add trim() to remove extra spaces
+  
+  // More flexible matching for "not checked in" status
+  if (status.includes('not check') || status === 'not checked in') {
+    employeeStats[empName].absent++;
+  } else if (status === 'present') {
+    employeeStats[empName].present++;
+  } else if (status === 'late') {
+    employeeStats[empName].late++;
+  } else {
+    // Catch any other status as absent (fallback)
+    employeeStats[empName].absent++;
+  }
+  
+  employeeStats[empName].totalHours += calculateHours(record);
+});
 
   // Calculate percentages
   const statusPercentages: Record<string, string> = {};
@@ -531,6 +561,22 @@ export async function POST(request: NextRequest) {
 
     // Calculate analytics
     const analytics = calculateAnalytics(attendanceData);
+
+
+// Adjust all times by +3 hours to Nairobi
+attendanceData = attendanceData.map(r => ({
+  ...r,
+  date: adjustToNairobiTime(r.date)!,
+  check_in_time: adjustToNairobiTime(r.check_in_time),
+  check_out_time: adjustToNairobiTime(r.check_out_time),
+  sessions: Array.isArray(r.sessions)
+    ? r.sessions.map((s: any) => ({
+        ...s,
+        check_in: adjustToNairobiTime(s.check_in),
+        check_out: adjustToNairobiTime(s.check_out),
+      }))
+    : r.sessions,
+}));
 
     // Generate PDF
     const pdfBuffer = generatePDF(
