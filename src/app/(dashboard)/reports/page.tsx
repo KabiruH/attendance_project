@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Download } from 'lucide-react';
 import Filters from '@/components/reports/Filters';
 import ReportsTable from '@/components/reports/ReportsTable';
+import PDFReportGenerator from '@/components/reports/PDFReportGenerator';
 import { Button } from '@/components/ui/button';
 import {
   Pagination,
@@ -36,23 +37,22 @@ export default function ReportsPage() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [showNotCheckedIn, setShowNotCheckedIn] = useState(false); // NEW: Toggle for not checked in filter
+  const [showNotCheckedIn, setShowNotCheckedIn] = useState(false);
   const { toast } = useToast();
 
   // Helper function to get 6PM cutoff time for a given date
   const getSixPMCutoff = (date: Date): Date => {
     const cutoff = new Date(date);
-    cutoff.setHours(18, 0, 0, 0); // 6:00 PM
+    cutoff.setHours(18, 0, 0, 0);
     return cutoff;
   };
 
-  // SIMPLIFIED: Helper function to check if employee has not checked in (Present status check)
+  // Helper function to check if employee has not checked in
   const isNotCheckedIn = (record: AttendanceRecord): boolean => {
-    // Show records that are NOT "Present" (includes "Late", "Absent", "Not Checked In")
     return record.status.toLowerCase() !== 'present';
   };
 
-  // Helper function to calculate hours from sessions (updated with 6PM cutoff)
+  // Helper function to calculate hours from sessions
   const calculateTotalHoursFromSessions = (sessions: AttendanceSession[]): number => {
     if (!sessions || sessions.length === 0) return 0;
     
@@ -67,16 +67,12 @@ export default function ReportsPage() {
         let effectiveCheckOut: Date;
         
         if (session.check_out) {
-          // Use actual check-out time, but cap at 6PM
           const actualCheckOut = new Date(session.check_out);
           effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
         } else {
-          // No check-out time
           if (currentTime >= sixPM) {
-            // Past 6PM, use 6PM as effective check-out
             effectiveCheckOut = sixPM;
           } else {
-            // Before 6PM, use current time
             effectiveCheckOut = currentTime;
           }
         }
@@ -88,7 +84,7 @@ export default function ReportsPage() {
       }
     });
     
-    return totalMinutes / 60; // Convert to hours
+    return totalMinutes / 60;
   };
 
   // Authenticate user and fetch attendance data
@@ -106,7 +102,6 @@ export default function ReportsPage() {
       const { user } = authData;
       setUserRole(user.role);
   
-      // Fetch attendance data
       const attendanceResponse = await fetch("/api/attendance", {
         method: "GET",
         credentials: 'include',
@@ -122,30 +117,28 @@ export default function ReportsPage() {
       const data = await attendanceResponse.json();
   
       if (user.role === "admin") {
-        // Include sessions data in admin mapping
         const processedData = data.attendanceData.map((record: any) => ({
           id: record.id,
           employee_id: record.employee_id,
-          date: new Date(record.date).toISOString().split('T')[0], // Format date
+          date: new Date(record.date).toISOString().split('T')[0],
           check_in_time: record.check_in_time,
           check_out_time: record.check_out_time,
           status: record.status.toLowerCase(),
-          sessions: record.sessions || [], // Include sessions data
+          sessions: record.sessions || [],
           Employees: {
-            name: record.Employees?.name || record.employee_name // Handle both possible structures
+            name: record.Employees?.name || record.employee_name
           }
         }));
         setAttendanceData(processedData);
       } else {
-        // Include sessions data in employee mapping
         const processedData = data.attendanceData.map((record: any) => ({
           id: record.id,
           employee_id: record.employee_id,
-          date: new Date(record.date).toISOString().split('T')[0], // Format date
+          date: new Date(record.date).toISOString().split('T')[0],
           check_in_time: record.check_in_time,
           check_out_time: record.check_out_time,
           status: record.status.toLowerCase(),
-          sessions: record.sessions || [], // Include sessions data
+          sessions: record.sessions || [],
           Employees: {
             name: user.name
           }
@@ -165,12 +158,11 @@ export default function ReportsPage() {
     }
   };
 
-  // Fetch data on component mount
   useEffect(() => {
     authenticateAndFetchAttendance();
   }, []);
 
-  // SIMPLIFIED: Filtered data - no more virtual records needed
+  // Filtered data
   const filteredData = useMemo(() => {
     const filtered = attendanceData.filter((record) => {
       const nameMatch = record.Employees?.name?.toLowerCase()
@@ -181,16 +173,13 @@ export default function ReportsPage() {
         (!filters.startDate || record.date >= filters.startDate) &&
         (!filters.endDate || record.date <= filters.endDate);
       
-      // NEW: Apply not-checked-in filter (shows anyone not "Present")
       const notCheckedInMatch = !showNotCheckedIn || isNotCheckedIn(record);
   
       return nameMatch && statusMatch && dateMatch && notCheckedInMatch;
     });
 
-    // NEW: Sort by status priority when filter is active
     if (showNotCheckedIn) {
       return filtered.sort((a, b) => {
-        // Define status priority: Late = 1, Not Checked In = 2, Absent = 3, Present = 4, Others = 5
         const getStatusPriority = (status: string) => {
           const normalizedStatus = status.toLowerCase();
           if (normalizedStatus === 'late') return 1;
@@ -203,12 +192,10 @@ export default function ReportsPage() {
         const priorityA = getStatusPriority(a.status);
         const priorityB = getStatusPriority(b.status);
 
-        // Sort by priority first
         if (priorityA !== priorityB) {
           return priorityA - priorityB;
         }
 
-        // If same priority, sort by employee name
         return (a.Employees?.name || '').localeCompare(b.Employees?.name || '');
       });
     }
@@ -227,20 +214,17 @@ export default function ReportsPage() {
       ...prev,
       [key]: value,
     }));
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   };
 
-  // NEW: Toggle not-checked-in filter
   const toggleNotCheckedInFilter = () => {
     setShowNotCheckedIn(!showNotCheckedIn);
-    setCurrentPage(1); // Reset to first page
+    setCurrentPage(1);
   };
 
-  // UPDATED: Helper function to calculate hours for export with 6PM cutoff
   const calculateHoursForExport = (record: AttendanceRecord): string => {
     const currentTime = new Date();
     
-    // Use sessions data if available (new format)
     if (record.sessions && Array.isArray(record.sessions) && record.sessions.length > 0) {
       let totalMinutes = 0;
       let hasActiveSession = false;
@@ -253,16 +237,12 @@ export default function ReportsPage() {
           let effectiveCheckOut: Date;
           
           if (session.check_out) {
-            // Use the actual check-out time, but cap it at 6PM
             const actualCheckOut = new Date(session.check_out);
             effectiveCheckOut = actualCheckOut > sixPM ? sixPM : actualCheckOut;
           } else {
-            // No check-out time
             if (currentTime >= sixPM) {
-              // Past 6PM, use 6PM as effective check-out
               effectiveCheckOut = sixPM;
             } else {
-              // Before 6PM, session is ongoing
               effectiveCheckOut = currentTime;
               hasActiveSession = true;
             }
@@ -280,14 +260,12 @@ export default function ReportsPage() {
       return hasActiveSession ? `${hours}h ${minutes}m (ongoing)` : `${hours}h ${minutes}m`;
     }
     
-    // Fallback to old format
     if (!record.check_in_time) return '-';
     
     const recordDate = new Date(record.date).toDateString();
     const today = new Date().toDateString();
     const isToday = recordDate === today;
     
-    // Convert to Date objects safely
     const checkIn = record.check_in_time instanceof Date ? record.check_in_time : new Date(record.check_in_time);
     const sixPM = getSixPMCutoff(checkIn);
     
@@ -342,7 +320,7 @@ export default function ReportsPage() {
       formatTimeForCSV(record.check_in_time), 
       formatTimeForCSV(record.check_out_time), 
       record.status,
-      calculateHoursForExport(record) // Uses sessions-aware calculation with 6PM cutoff
+      calculateHoursForExport(record)
     ]);
     
     const csvContent = [
@@ -357,7 +335,6 @@ export default function ReportsPage() {
     link.click();
   };
 
-  // Helper function to get visible page numbers for pagination
   const getVisiblePages = () => {
     const maxVisiblePages = 10;
     const halfVisible = Math.floor(maxVisiblePages / 2);
@@ -365,7 +342,6 @@ export default function ReportsPage() {
     let startPage = Math.max(1, currentPage - halfVisible);
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
     
-    // Adjust start page if we're near the end
     if (endPage - startPage < maxVisiblePages - 1) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
@@ -373,13 +349,11 @@ export default function ReportsPage() {
     return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
   };
 
-  // Render the component
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Attendance Reports</h1>
         <div className="flex gap-2">
-          {/* NEW: Not Checked In Filter Button */}
           <Button 
             onClick={toggleNotCheckedInFilter} 
             variant={showNotCheckedIn ? "default" : "outline"}
@@ -391,6 +365,7 @@ export default function ReportsPage() {
             <Download className="mr-2 h-4 w-4" />
             Export to CSV
           </Button>
+          <PDFReportGenerator />
         </div>
       </div>
 
@@ -422,7 +397,6 @@ export default function ReportsPage() {
               />
             </PaginationItem>
 
-            {/* Show first page if not visible */}
             {getVisiblePages()[0] > 1 && (
               <>
                 <PaginationItem>
@@ -444,7 +418,6 @@ export default function ReportsPage() {
               </>
             )}
 
-            {/* Visible page numbers */}
             {getVisiblePages().map((pageNum) => (
               <PaginationItem key={pageNum}>
                 <PaginationLink
@@ -460,7 +433,6 @@ export default function ReportsPage() {
               </PaginationItem>
             ))}
 
-            {/* Show last page if not visible */}
             {getVisiblePages()[getVisiblePages().length - 1] < totalPages && (
               <>
                 {getVisiblePages()[getVisiblePages().length - 1] < totalPages - 1 && (
