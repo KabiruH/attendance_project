@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Upload, Download } from "lucide-react";
+import { PlusCircle, Upload, Download, KeyRound } from "lucide-react";
 import UsersTable from '@/components/users/users';
 import * as XLSX from 'xlsx';
 import {
@@ -52,7 +52,16 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deactivatingUser, setDeactivatingUser] = useState<User | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
-  
+
+  // Password change states
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [passwordTargetUser, setPasswordTargetUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   // Excel import states
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -110,7 +119,7 @@ export default function UsersPage() {
     });
     setError('');
     setIsDialogOpen(true);
-  };  
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,9 +135,7 @@ export default function UsersPage() {
 
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
@@ -171,9 +178,7 @@ export default function UsersPage() {
         method: 'POST',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to deactivate user');
-      }
+      if (!response.ok) throw new Error('Failed to deactivate user');
 
       await fetchUsers();
     } catch (error) {
@@ -183,6 +188,55 @@ export default function UsersPage() {
       setDeactivatingUser(null);
     }
   };
+
+  // ── Password change handlers ──────────────────────────────────────────────
+  const handleOpenPasswordDialog = (user: User) => {
+    setPasswordTargetUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setPasswordSuccess('');
+    setIsPasswordDialogOpen(true);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const response = await fetch('/api/users/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: passwordTargetUser?.id, newPassword }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to change password');
+      }
+
+      setPasswordSuccess(`Password for ${passwordTargetUser?.name} updated successfully.`);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Excel import handlers
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,34 +250,26 @@ export default function UsersPage() {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      
-      // Find the sheet with actual data (skip Instructions sheet if present)
+
       let worksheet;
       const dataSheetIndex = workbook.SheetNames.findIndex(
         name => name.toLowerCase().includes('sample') || name.toLowerCase().includes('data') || name.toLowerCase() === 'users'
       );
-      
+
       if (dataSheetIndex !== -1) {
         worksheet = workbook.Sheets[workbook.SheetNames[dataSheetIndex]];
       } else {
-        // If no specific sheet found, use the last sheet (assuming first is instructions)
         worksheet = workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length - 1]];
       }
-      
+
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      console.log('Raw Excel data:', jsonData); // Debug log
-
-      // Filter out empty rows and transform Excel data
       const usersToImport = jsonData
-        .filter((row: any) => {
-          // Skip rows where name is empty or undefined
-          return row.name || row.Name;
-        })
+        .filter((row: any) => row.name || row.Name)
         .map((row: any) => {
           const user = {
             name: (row.name || row.Name || '').toString().trim(),
-            id_number: (row.id_number || row['ID Number'] || row.id_number || '').toString().trim(),
+            id_number: (row.id_number || row['ID Number'] || '').toString().trim(),
             role: (row.role || row.Role || '').toString().toLowerCase().trim(),
             phone_number: (row.phone_number || row['Phone Number'] || row.phone || '').toString().trim(),
             gender: (row.gender || row.Gender || '').toString().toLowerCase().trim(),
@@ -231,33 +277,26 @@ export default function UsersPage() {
             email: row.email || row.Email || null,
             is_active: row.is_active === false || row.is_active === 'false' ? false : true
           };
-          
-          // Clean up empty string values to null for optional fields
+
           if (user.department === '') user.department = null;
           if (user.email === '') user.email = null;
-          
+
           return user;
         });
-
-      console.log('Transformed users:', usersToImport); // Debug log
 
       if (usersToImport.length === 0) {
         throw new Error('No valid user data found in the Excel file. Please check the format.');
       }
 
-      // Send to API
       const response = await fetch('/api/users/import', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ users: usersToImport }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        // Show detailed error information
         const errorMessage = result.error || 'Failed to import users';
         const details = result.details ? JSON.stringify(result.details, null, 2) : '';
         throw new Error(`${errorMessage}${details ? '\n\nDetails: ' + details : ''}`);
@@ -269,23 +308,16 @@ export default function UsersPage() {
         errors: result.errors || []
       });
 
-      // Refresh users list
       await fetchUsers();
-
     } catch (error) {
-      console.error('Import error:', error); // Debug log
       setError(error instanceof Error ? error.message : 'Failed to process file');
     } finally {
       setIsImporting(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const downloadTemplate = () => {
-    // Sample data with multiple examples
     const template = [
       {
         name: 'John Doe',
@@ -299,73 +331,24 @@ export default function UsersPage() {
       }
     ];
 
-    // Instructions sheet
     const instructions = [
       { Instruction: 'USERS IMPORT TEMPLATE - INSTRUCTIONS' },
       { Instruction: '' },
-      { Instruction: 'Required Fields (must be filled):' },
-      { Instruction: '  - name: Full name of the user' },
-      { Instruction: '  - id_number: Unique ID or Passport number' },
-      { Instruction: '  - role: Must be either "admin" or "employee"' },
-      { Instruction: '  - phone_number: Phone number with country code (e.g., +254712345678)' },
-      { Instruction: '  - gender: Must be either "male" or "female"' },
-      { Instruction: '' },
-      { Instruction: 'Optional Fields:' },
-      { Instruction: '  - department: User\'s department' },
-      { Instruction: '  - email: User\'s email address (must be unique if provided)' },
-      { Instruction: '  - is_active: Set to true or false (default is true)' },
-      { Instruction: '' },
-      { Instruction: 'Valid Departments:' },
-      { Instruction: '  - Finance' },
-      { Instruction: '  - Human Resources' },
-      { Instruction: '  - Engineering' },
-      { Instruction: '  - Procurement' },
-      { Instruction: '  - Administration' },
-      { Instruction: '  - Executive' },
-      { Instruction: '  - Building and Civil Engineering' },
-      { Instruction: '  - Electrical and Electronics Engineering' },
-      { Instruction: '  - Cosmetology' },
-      { Instruction: '  - Fashion Design and Clothing Textile' },
-      { Instruction: '  - Business and Liberal Studies' },
-      { Instruction: '  - Agriculture and Environment Studies' },
-      { Instruction: '  - Automotive and Mechanical Engineering' },
-      { Instruction: '  - Hospitality and Institutional Management' },
-      { Instruction: '' },
-      { Instruction: 'Important Notes:' },
-      { Instruction: '  - ID numbers must be unique across all users' },
-      { Instruction: '  - Email addresses must be unique if provided' },
-      { Instruction: '  - Delete the sample data rows before importing your actual data' },
-      { Instruction: '  - Keep the column headers exactly as shown' },
-      { Instruction: '  - The system will skip duplicate entries and show errors' },
-      { Instruction: '' },
-      { Instruction: 'After filling the template:' },
-      { Instruction: '  1. Save the file' },
-      { Instruction: '  2. Go to the Import Excel dialog' },
-      { Instruction: '  3. Upload your file' },
-      { Instruction: '  4. Review the import results' }
+      { Instruction: 'Required Fields: name, id_number, role (admin|employee), phone_number, gender (male|female)' },
+      { Instruction: 'Optional Fields: department, email (must be unique), is_active (true|false)' },
     ];
 
     const workbook = XLSX.utils.book_new();
-    
-    // Add instructions sheet
     const instructionsWS = XLSX.utils.json_to_sheet(instructions);
     instructionsWS['!cols'] = [{ wch: 80 }];
     XLSX.utils.book_append_sheet(workbook, instructionsWS, 'Instructions');
-    
-    // Add sample data sheet
+
     const dataWS = XLSX.utils.json_to_sheet(template);
     dataWS['!cols'] = [
-      { wch: 20 }, // name
-      { wch: 15 }, // id_number
-      { wch: 12 }, // role
-      { wch: 18 }, // phone_number
-      { wch: 10 }, // gender
-      { wch: 40 }, // department
-      { wch: 30 }, // email
-      { wch: 10 }  // is_active
+      { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 18 },
+      { wch: 10 }, { wch: 40 }, { wch: 30 }, { wch: 10 }
     ];
     XLSX.utils.book_append_sheet(workbook, dataWS, 'Sample Data');
-
     XLSX.writeFile(workbook, 'users_import_template.xlsx');
   };
 
@@ -522,18 +505,29 @@ export default function UsersPage() {
                   </div>
                 )}
 
+                {/* Change Password button inside Edit dialog */}
+                {editingUser && (
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setIsDialogOpen(false);
+                        handleOpenPasswordDialog(editingUser);
+                      }}
+                    >
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Change Password
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                  >
+                  <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
                   </Button>
                 </div>
@@ -543,13 +537,75 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {/* ── Change Password Dialog ─────────────────────────────────────────── */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Change Password — {passwordTargetUser?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            {passwordError && (
+              <Alert variant="destructive">
+                <AlertDescription>{passwordError}</AlertDescription>
+              </Alert>
+            )}
+            {passwordSuccess && (
+              <Alert>
+                <AlertDescription className="text-green-600">{passwordSuccess}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="Minimum 6 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                placeholder="Repeat the new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsPasswordDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isChangingPassword}>
+                {isChangingPassword ? 'Updating...' : 'Update Password'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* ─────────────────────────────────────────────────────────────────── */}
+
       {/* Excel Import Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Import Users from Excel</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {error && (
               <Alert variant="destructive">
@@ -583,17 +639,12 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <Label>Step 1: Download Template</Label>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={downloadTemplate}
-                className="w-full"
-              >
+              <Button type="button" variant="outline" onClick={downloadTemplate} className="w-full">
                 <Download className="mr-2 h-4 w-4" />
                 Download Excel Template
               </Button>
               <p className="text-sm text-muted-foreground">
-                Download the template file and fill in your user data. Required fields: 
+                Download the template file and fill in your user data. Required fields:
                 name, id_number, role, phone_number, gender
               </p>
             </div>
@@ -637,10 +688,7 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={!!deactivatingUser}
-        onOpenChange={() => setDeactivatingUser(null)}
-      >
+      <AlertDialog open={!!deactivatingUser} onOpenChange={() => setDeactivatingUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate User Account</AlertDialogTitle>
@@ -661,7 +709,7 @@ export default function UsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       <UsersTable users={users} onEdit={handleEdit} />
     </div>
   );
