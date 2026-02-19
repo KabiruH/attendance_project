@@ -218,7 +218,7 @@ export default function UsersPage() {
       const response = await fetch('/api/users/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: passwordTargetUser?.id, newPassword }),
+        body: JSON.stringify({ userId: passwordTargetUser?.id, newPassword }),     
       });
 
       const data = await response.json();

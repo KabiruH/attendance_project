@@ -42,18 +42,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Check target user exists
-    const user = await db.employees.findUnique({ where: { id: Number(userId) } });
+ const employee = await db.employees.findUnique({ where: { employee_id: Number(userId) } });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+if (!employee) {
+  return NextResponse.json({ error: 'User not found' }, { status: 404 });
+}
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await db.employees.update({
-      where: { id: Number(userId) },
-      data: { password: hashedPassword },
-    });
+await db.employees.update({
+  where: { employee_id: Number(userId) },
+  data: { password: hashedPassword },
+});
 
     return NextResponse.json({ message: 'Password updated successfully' });
   } catch (error) {
