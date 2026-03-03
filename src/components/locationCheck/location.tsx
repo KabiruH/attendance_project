@@ -77,10 +77,6 @@ export default function LocationCheck({ children }: { children: React.ReactNode 
             description: "You've left the allowed area. You will be logged out.",
             variant: "destructive"
           });
-          
-          // Logout user
-          await fetch('/api/auth/logout', { method: 'POST' });
-          router.push('/login');
         }
 
         initialCheckDone = true;
